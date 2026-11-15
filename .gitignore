@@ -5,6 +5,7 @@ baseline.json
 suppress.json
 trusted_ports.json
 fw_changes.json
+svc_changes.json
 alerts.jsonl
 timed_blocks.json
 fw_snapshot.json

@@ -105,7 +105,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .kpi.click{cursor:pointer}.kpi.click:hover{border-color:var(--border2)}
 .sub.ok{color:var(--ok)}.sub.info{color:var(--info)}
 td.wrap{white-space:normal;min-width:120px;max-width:300px}
-td.cap{max-width:260px}
+td.cap{max-width:380px}
+select.svm{padding:2px 4px;font-size:12px}
 td.wrap .tag{margin:1px 3px 1px 0}
 .tw{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .tag{display:inline-block;padding:0 6px;border-radius:4px;font-size:11px;line-height:17px;margin-right:3px;background:#1d2433;color:var(--muted);border:1px solid #273044}
@@ -450,8 +451,10 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
       <div class="subtabs" id="sttabs"><a data-t="st" class="on">Başlangıç öğeleri</a><a data-t="tk">Zamanlanmış görevler</a><a data-t="sv">Servisler</a></div>
       <div class="toolbar">
         <input type="search" id="stq" placeholder="Ara…">
-        <label class="chk" id="stmsl"><input type="checkbox" id="stms"> Microsoft öğelerini de göster</label>
-        <label class="chk" id="strunl"><input type="checkbox" id="strun"> Sadece çalışanlar</label>
+        <label class="chk" id="stmsl" hidden><input type="checkbox" id="stms"> Microsoft öğelerini de göster</label>
+        <label class="chk" id="strunl" hidden><input type="checkbox" id="strun"> Sadece çalışanlar</label>
+        <select id="svstart" title="Başlangıç türüne göre süz" hidden><option value="">Başlangıç: tümü</option><option value="automatic">Otomatik</option><option value="manual">El ile</option><option value="disabled">Devre dışı</option></select>
+        <span class="muted" id="svadmin" hidden>Servisleri yönetmek için yönetici modu gerekir.</span>
         <span class="grow"></span><span class="count" id="stcount"></span>
         <button class="sm" id="streload">Yenile</button>
       </div>
@@ -672,8 +675,8 @@ function table(el, id, cols, rows, opts={}){
   el.scrollTop = sc; fitTw(el);
   if(!el._bound){ el._bound=true;
     el.addEventListener("click", e=>{
-      const th = e.target.closest("th"); if(th){ const s=TS[id]; if(s.k===th.dataset.k) s.d=!s.d; else {s.k=th.dataset.k; s.d=true;} refreshPage(); return; }
-      if(e.target.closest("button,a,input")) return;
+      const th = e.target.closest("th"); if(th){ const s=TS[el._tid]; if(s.k===th.dataset.k) s.d=!s.d; else {s.k=th.dataset.k; s.d=true;} refreshPage(); return; }
+      if(e.target.closest("button,a,input,select")) return;
       const tr = e.target.closest("tr[data-i]"); if(tr && el._click) el._click(el._rows[+tr.dataset.i]);
     });
   }
@@ -1428,35 +1431,127 @@ async function loadNet(force){
 }
 
 /* ================= BAŞLANGIÇ ================= */
-let STDATA=null, STT="st";
-$$("#sttabs a").forEach(a=>a.onclick=()=>{ $$("#sttabs a").forEach(x=>x.classList.toggle("on",x===a)); STT=a.dataset.t; renderStartup(); });
-async function loadStartup(force){ $("#sttable").innerHTML='<div class="empty"><div class="prog"><i></i></div>Yükleniyor… (zamanlanmış görevler birkaç saniye sürebilir)</div>'; STDATA = await api("/api/startup"+(force?"?force=1":"")); renderStartup(); }
-async function toggleStartup(i){ const r=STDATA&&STDATA.startup[i]; if(!r) return;
+const STPARTS={st:"startup",tk:"tasks",sv:"services"}, STDATA={}, STLOAD={};
+let STT="st", svcBusy=null;
+$$("#sttabs a").forEach(a=>a.onclick=()=>{
+  $$("#sttabs a").forEach(x=>x.classList.toggle("on",x===a));
+  STT=a.dataset.t;
+  openStartupTab();
+});
+function openStartupTab(){
+  const part=STPARTS[STT];
+  if(STDATA[part]||STLOAD[part]) renderStartup();
+  else loadStartup();
+}
+async function loadStartup(force=false,part=STPARTS[STT],quiet=false){
+  const request=Symbol();
+  STLOAD[part]=request;
+  if(!quiet) delete STDATA[part];
+  if(part===STPARTS[STT]) renderStartup();
+  let data;
+  try {
+    data=await api(`/api/startup?part=${part}${force?"&force=1":""}`);
+  } catch {
+    data={err:"Liste yüklenemedi. Yenile düğmesiyle tekrar deneyin."};
+  }
+  if(STLOAD[part]!==request) return;
+  STDATA[part]=data;
+  delete STLOAD[part];
+  if(part===STPARTS[STT]) renderStartup();
+}
+async function toggleStartup(i){ const r=STDATA.startup?.rows?.[i]; if(!r) return;
   const res=await post("/api/startup/toggle",{name:r.name,source:r.source,enable:!r.enabled});
-  if(res.ok){ toast(`${r.name} ${r.enabled?"devre dışı bırakıldı":"etkinleştirildi"}`); loadStartup(true); } else toast(res.error,1); }
+  if(res.ok){ toast(`${r.name} ${r.enabled?"devre dışı bırakıldı":"etkinleştirildi"}`); loadStartup(true,"startup"); } else toast(res.error,1); }
 window.toggleStartup=toggleStartup;
 function renderStartup(){
-  if(!STDATA) return;
-  const q=$("#stq").value.toLowerCase(), ms=$("#stms").checked, run=$("#strun").checked;
-  $("#stmsl").style.display = STT==="st"?"none":""; $("#strunl").style.display = STT==="sv"?"":"none";
-  let n, total;
-  if(STT==="st"){ const rows=STDATA.startup.filter(r=>!q||(r.name+r.cmd+r.source).toLowerCase().includes(q)); total=STDATA.startup.length;
+  $("#stmsl").hidden = STT==="st";
+  $("#strunl").hidden = STT!=="sv";
+  $("#svstart").hidden = STT!=="sv";
+  $("#svadmin").hidden = STT!=="sv"||ADMIN;
+  const data=STDATA[STPARTS[STT]], el=$("#sttable"), csv=$("#p-startup .csvbtn");
+  if(csv) csv.hidden=!data?.rows||!!data.err;
+  if(!data?.rows||data.err){
+    const err=data?.err||data?.error;
+    $("#stcount").textContent="";
+    el.innerHTML=err ? `<div class="empty" role="status">${esc(err)}</div>`
+      : `<div class="empty" role="status"><div class="prog"><i></i></div>${STT==="tk"?"Zamanlanmış görevler yükleniyor…":"Yükleniyor…"}</div>`;
+    fitTw(el);
+    return;
+  }
+  const all=data.rows, q=$("#stq").value.toLowerCase(), ms=$("#stms").checked, run=$("#strun").checked;
+  let n;
+  if(STT==="st"){ const rows=all.filter(r=>!q||(r.name+r.cmd+r.source).toLowerCase().includes(q));
     n=table($("#sttable"),"st",[{k:"enabled",l:"Durum",f:r=>r.enabled?'<span class="tag ok">Etkin</span>':'<span class="tag">Devre dışı</span>'},
       {k:"name",l:"Ad",f:r=>`<b>${esc(r.name)}</b>`},{k:"source",l:"Kaynak",f:r=>`<span class="muted">${esc(r.source)}</span>`},{k:"cmd",l:"Komut",f:r=>`<span class="mono muted">${esc(r.cmd)}</span>`,t:r=>r.cmd},
-      {k:"_a",l:"",f:r=>{ if(!/^(HKCU Run|HKLM Run|HKLM Run \(32-bit\)|Başlangıç klasörü)/.test(r.source)) return ""; const i=STDATA.startup.indexOf(r);
+      {k:"_a",l:"",f:r=>{ if(!/^(HKCU Run|HKLM Run|HKLM Run \(32-bit\)|Başlangıç klasörü)/.test(r.source)) return ""; const i=all.indexOf(r);
         return `<button class="sm" onclick="toggleStartup(${i})" title="${r.enabled?"Bir sonraki oturum açışta çalışmaz (çalışan program kapanmaz)":"Oturum açılışında tekrar çalışır"}">${r.enabled?"Devre dışı bırak":"Etkinleştir"}</button>`; }}],rows,{sort:"source",desc:false});
-  } else if(STT==="tk"){ const all=STDATA.tasks||[]; const rows=all.filter(r=>(ms||!r.ms)&&(!q||(r.name+r.path+r.run+r.author).toLowerCase().includes(q))); total=all.length;
+  } else if(STT==="tk"){ const rows=all.filter(r=>(ms||!r.ms)&&(!q||(r.name+r.path+r.run+r.author).toLowerCase().includes(q)));
     n=table($("#sttable"),"tk",[{k:"state",l:"Durum",f:r=>`<span class="tag ${r.state==="Running"?"ok":""}">${esc(r.state)}</span>`},{k:"name",l:"Görev",f:r=>`<b>${esc(r.name)}</b>`},
-      {k:"path",l:"Klasör",f:r=>`<span class="muted">${esc(r.path)}</span>`},{k:"trig",l:"Tetikleyici"},{k:"author",l:"Yazar",f:r=>esc(r.author||"")},{k:"run",l:"Çalıştırılan",f:r=>`<span class="mono muted">${esc(r.run)}</span>`,t:r=>r.run}],rows,{sort:"name",desc:false,empty:esc(STDATA.err||"Kayıt yok")});
-  } else { const all=STDATA.services||[]; const rows=all.filter(r=>(ms||!r.ms)&&(!run||r.status==="running")&&(!q||(r.name+r.display+r.bin+r.user).toLowerCase().includes(q))); total=all.length;
-    n=table($("#sttable"),"sv",[{k:"status",l:"Durum",f:r=>`<span class="tag ${r.status==="running"?"ok":""}">${r.status==="running"?"Çalışıyor":r.status==="stopped"?"Durdu":esc(r.status)}</span>`},
-      {k:"display",l:"Servis",f:r=>`<b>${esc(r.display)}</b> <span class="dim">${esc(r.name)}</span>`,t:r=>r.desc},{k:"start",l:"Başlangıç",f:r=>({automatic:"Otomatik",manual:"El ile",disabled:"Devre dışı"}[r.start]||esc(r.start))},
-      {k:"pid",l:"PID",num:1,f:r=>r.pid||""},{k:"user",l:"Hesap",f:r=>`<span class="muted">${esc(r.user)}</span>`},{k:"bin",l:"Çalıştırılabilir",f:r=>`<span class="mono muted">${esc(r.bin)}</span>`,t:r=>r.bin}],rows,
-      {sort:"status",click:r=>r.pid&&openProc(r.pid)});
+      {k:"path",l:"Klasör",f:r=>`<span class="muted">${esc(r.path)}</span>`},{k:"trig",l:"Tetikleyici"},{k:"author",l:"Yazar",f:r=>esc(r.author||"")},{k:"run",l:"Çalıştırılan",f:r=>`<span class="mono muted">${esc(r.run)}</span>`,t:r=>r.run}],rows,{sort:"name",desc:false});
+  } else { const sm=$("#svstart").value;
+    const rows=all.filter(r=>(ms||!r.ms)&&(!run||r.status==="running")&&(!sm||r.start===sm)&&(!q||(r.name+r.display+r.bin+r.user+r.desc).toLowerCase().includes(q)));
+    n=table($("#sttable"),"sv",[
+      {k:"status",l:"Durum",f:r=>`<span class="tag ${r.status==="running"?"ok":""}">${r.status==="running"?"Çalışıyor":r.status==="stopped"?"Durdu":esc(r.status)}</span>`},
+      {k:"display",l:"Servis",cls:"cap",f:r=>`<b>${esc(r.display)}</b> <span class="dim">${esc(r.name)}</span>`+(r.critical?` <span class="tag" title="Windows için kritik: Gözcü bu servisi durdurmaz / devre dışı bırakmaz">Korumalı</span>`:"")
+        +(r.gz?` <span class="tag info" title="${esc("Gözcü ile değiştirildi: "+(SVMODE_TR[r.gz.prev]||r.gz.prev)+" → "+(SVMODE_TR[r.gz.new]||r.gz.new)+" · "+dt(r.gz.t))}">Gözcü ile değiştirildi</span>`:"")
+        +(r.desc?`<span class="sub" style="max-width:360px" title="${esc(r.desc)}">${esc(r.desc)}</span>`:"")},
+      {k:"start",l:"Başlangıç",s:r=>svMode(r),f:r=>{ const cur=svMode(r);
+        if(!ADMIN||r.critical) return esc(SVMODE_TR[cur]||cur);
+        return `<select class="svm" aria-label="${esc(r.display)} başlangıç türü" data-svm="${esc(r.name)}" data-cur="${esc(cur)}" ${svcBusy?"disabled":""}>${SVMODES.map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")}</select>`; }},
+      {k:"_act",l:"Eylem",f:r=>{ if(!ADMIN) return '<span class="dim" title="Yönetici modu gerekir">–</span>'; if(r.critical) return '<span class="dim">korumalı</span>';
+        if(svcBusy===r.name) return '<span class="muted">İşlem sürüyor…</span>';
+        const nm=esc(r.name);
+        const disabled=svcBusy?"disabled":"";
+        if(r.status==="running"||r.status==="paused") return `<button class="sm" data-svact="stop" data-n="${nm}" ${disabled}>Durdur</button> <button class="sm" data-svact="restart" data-n="${nm}" ${r.start==="disabled"?"disabled":disabled}>Yeniden başlat</button>`;
+        if(r.status!=="stopped") return '<span class="dim">–</span>';
+        return `<button class="sm" data-svact="start" data-n="${nm}" ${r.start==="disabled"?'disabled title="Servis devre dışı: önce başlangıç türünü değiştirin"':disabled}>Başlat</button>`; }},
+      {k:"bin",l:"Çalıştırılabilir",cls:"cap",f:r=>(r.pid?`<span class="dim mono">PID ${r.pid}</span> `:"")+`<span class="muted">${esc(r.user)}</span><span class="sub mono" title="${esc(r.bin)}">${esc(r.bin)}</span>`}],
+      rows,{sort:"status",click:r=>r.pid&&openProc(r.pid),
+        csv:[{l:"Durum",v:r=>r.status},{l:"Servis adı",v:r=>r.name},{l:"Görünen ad",v:r=>r.display},{l:"Başlangıç",v:r=>SVMODE_TR[svMode(r)]||r.start},{l:"PID",v:r=>r.pid||""},
+             {l:"Hesap",v:r=>r.user},{l:"Çalıştırılabilir",v:r=>r.bin},{l:"Açıklama",v:r=>r.desc}]});
   }
-  $("#stcount").textContent = `${n} / ${total}` + (STT!=="st"&&!ms?" (Microsoft dışı)":"");
+  $("#stcount").textContent = `${n} / ${all.length}` + (STT!=="st"&&!ms?" (Microsoft dışı)":"");
 }
-["#stq","#stms","#strun"].forEach(s=>$(s).addEventListener("input",renderStartup));
+const SVMODES=[["automatic","Otomatik"],["delayed","Otomatik (gecikmeli)"],["manual","El ile"],["disabled","Devre dışı"]], SVMODE_TR=Object.fromEntries(SVMODES);
+const svMode=r=>r.start==="automatic"&&r.delayed?"delayed":r.start;
+const SVACT_TR={start:"başlatılsın",stop:"durdurulsun",restart:"yeniden başlatılsın"};
+async function runServiceChange(path, data, success){
+  if(svcBusy) return;
+  svcBusy=data.name;
+  renderStartup();
+  try {
+    const res=await post(path,data);
+    if(res.ok) { toast(success(res)); await loadStartup(false,"services",true); }
+    else toast(res.error,1);
+  } catch(e) {
+    toast("Servisin son durumu alınamadı. Listeyi yenileyin.",1);
+  } finally {
+    svcBusy=null;
+    renderStartup();
+  }
+}
+async function svcAction(name,action){
+  if(svcBusy||_mdlOpen) return;
+  const r=STDATA.services?.rows?.find(x=>x.name===name); if(!r) return;
+  const label={start:"Başlat",stop:"Durdur",restart:"Yeniden başlat"}[action];
+  const msg=`"${r.display}" servisi ${SVACT_TR[action]} mı?`+(action!=="start"?"\n\nBu servisi kullanan uygulamalar geçici olarak kesintiye uğrayabilir.":"");
+  if(!await uiConfirm(msg,{title:"Servis · "+label,ok:label,danger:action!=="start"})) return;
+  await runServiceChange("/api/service/action",{name,action},()=>
+    ({start:"Servis başlatıldı",stop:"Servis durduruldu",restart:"Servis yeniden başlatıldı"}[action]));
+}
+async function svcStartup(sel){
+  const name=sel.dataset.svm, mode=sel.value, cur=sel.dataset.cur;
+  sel.value=cur;
+  if(svcBusy||_mdlOpen||mode===cur) return;
+  const r=STDATA.services?.rows?.find(x=>x.name===name); if(!r) return;
+  const risky=mode==="disabled";
+  if(!await uiConfirm(`"${r.display}" servisinin başlangıç türü\n${SVMODE_TR[cur]||cur} → ${SVMODE_TR[mode]}\nolarak değiştirilsin mi?`+(risky?"\n\nServisi yeniden başlatabilmek için başlangıç türünü tekrar değiştirmeniz gerekir.":""),
+      {title:"Başlangıç türünü değiştir",ok:"Değiştir",danger:risky})) return;
+  await runServiceChange("/api/service/startup",{name,mode},()=>`Başlangıç türü ${SVMODE_TR[mode]} olarak değiştirildi`);
+}
+$("#sttable").addEventListener("click",e=>{ const b=e.target.closest("[data-svact]"); if(b) svcAction(b.dataset.n,b.dataset.svact); });
+$("#sttable").addEventListener("change",e=>{ const s=e.target.closest("select.svm"); if(s) svcStartup(s); });
+["#stq","#stms","#strun","#svstart"].forEach(s=>$(s).addEventListener("input",renderStartup));
 $("#streload").onclick=()=>loadStartup(true);
 
 /* ================= DİSK ================= */
@@ -1579,7 +1674,7 @@ async function refreshPage(first){
     else if(CUR==="feed"){ if($("#feed-ahist").style.display!=="none"){ await loadAhist(); } else if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none"){ renderFeed(); await loadActAlerts(); } else { await pollFwLog(); renderFwLog(); } }
     else if(CUR==="fw"){ if(first&&!FWDATA) await loadFw(); else renderRules(); }
     else if(CUR==="net"){ if(first) await loadNet(); }
-    else if(CUR==="startup"){ if(first&&!STDATA) await loadStartup(); else renderStartup(); }
+    else if(CUR==="startup"){ if(first) openStartupTab(); else renderStartup(); }
     else if(CUR==="disk"){ if(first) await loadDisk(); }
     else if(CUR==="sec"){ if(first){ loadBaseline(); await loadSec(); } }
   }catch(e){ console.error(e); }
@@ -1590,6 +1685,7 @@ async function tick(){
   try{
     if(!PAUSED){
       OV = await api("/api/overview");
+      const wasAdmin = ADMIN;
       ADMIN = OV.admin;
       $("#hostname").textContent = OV.host+" · "+OV.user;
       $("#privdot").className="dot "+(OV.admin?"ok":"warn"); $("#privtxt").textContent=OV.admin?"Yönetici modu":"Standart kullanıcı modu";
@@ -1603,7 +1699,7 @@ async function tick(){
       if(CUR==="net" && tickN%3===0) await loadNet();
       if(CUR==="disk"){ const running = await pollScan(); }
       if(CUR==="fw" && tickN%10===0) await loadFw();
-      await refreshPage(false);
+      if(CUR!=="startup"||wasAdmin!==ADMIN) await refreshPage(false);
     }
     $("#clock").textContent = new Date().toLocaleTimeString("tr-TR") + (PAUSED?" · duraklatıldı":"");
   }catch(e){ $("#clock").innerHTML='<span class="bad">Sunucuya ulaşılamıyor — Gözcü penceresi kapalı olabilir</span>'; }

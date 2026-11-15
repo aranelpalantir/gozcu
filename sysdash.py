@@ -1275,6 +1275,45 @@ def sched_tasks():
         " | ConvertTo-Json -Compress", timeout=120)
 
 
+# Windows'un calismasi icin kritik servisler: Gozcu bunlari durdurmaz / devre disi birakmaz
+PROTECTED_SVC = {
+    "rpcss", "dcomlaunch", "rpceptmapper", "lsm", "samss", "eventlog", "plugplay", "power", "profsvc", "schedule", "winmgmt",
+    "cryptsvc", "dhcp", "dnscache", "bfe", "mpssvc", "windefend", "wscsvc", "trustedinstaller", "lanmanworkstation", "nsi",
+    "netprofm", "nlasvc", "gpsvc", "sens", "systemeventsbroker", "timebrokersvc", "usermanager", "brokerinfrastructure",
+    "coremessagingregistrar", "staterepository", "tiledatamodelsvc", "keyiso", "lsass", "wininit", "csrss", "smss",
+}
+SVC_LOG_FILE = os.path.join(APP_DIR, "svc_changes.json")
+SVC_CHANGES = {}   # servis adi (lower) -> son Gozcu degisikligi
+SVC_MODES = {"automatic": "auto", "delayed": "delayed-auto", "manual": "demand", "disabled": "disabled"}
+SVC_MODE_TR = {"automatic": "Otomatik", "delayed": "Otomatik (gecikmeli)", "manual": "El ile", "disabled": "Devre dışı"}
+
+
+def _svc_delayed(name):
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\" + name) as k:
+            return winreg.QueryValueEx(k, "DelayedAutostart")[0] == 1
+    except OSError:
+        return False
+
+
+def _svc_log_load():
+    try:
+        with open(SVC_LOG_FILE, "r", encoding="utf-8") as f:
+            for r in json.load(f):
+                SVC_CHANGES[r["name"].lower()] = r
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+def _svc_log_add(name, display, what, prev, new):
+    SVC_CHANGES[name.lower()] = {"name": name, "display": display, "what": what, "prev": prev, "new": new, "t": time.time()}
+    try:
+        with open(SVC_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(SVC_CHANGES.values()), f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def services():
     out = []
     for s in psutil.win_service_iter():
@@ -1284,13 +1323,91 @@ def services():
             continue
         bp = d.get("binpath") or ""
         low = bp.lower().strip('"')
+        start = d.get("start_type")
         out.append({
             "name": d.get("name"), "display": d.get("display_name"), "status": d.get("status"),
-            "start": d.get("start_type"), "pid": d.get("pid"), "user": d.get("username") or "",
+            "start": start, "delayed": start == "automatic" and _svc_delayed(d.get("name") or ""),
+            "pid": d.get("pid"), "user": d.get("username") or "",
             "bin": bp, "ms": low.startswith(WINDIR) or "\\windows\\" in low[:40],
             "desc": (d.get("description") or "")[:300],
+            "critical": (d.get("name") or "").lower() in PROTECTED_SVC,
+            "gz": SVC_CHANGES.get((d.get("name") or "").lower()),
         })
     return out
+
+
+def _svc_err(msg):
+    """Windows'un (İngilizce/Türkçe karışık) servis hata iletisini anlaşılır Türkçe'ye çevirir."""
+    m = (msg or "").strip().splitlines()
+    m = m[0].strip() if m else ""
+    low = m.lower()
+    if "denied" in low or "reddedildi" in low or "cannot open" in low or "açılamıyor" in low:
+        return "Erişim reddedildi: Gözcü'yü yönetici olarak çalıştırın."
+    if "dependent" in low or "bağımlı" in low:
+        return "Başka servisler buna bağlı; önce onlar durdurulmalı."
+    if "timeout" in low or "zaman aşımı" in low or "did not respond" in low:
+        return "Servis zamanında yanıt vermedi (zaman aşımı)."
+    if "disabled" in low or "devre dışı" in low:
+        return "Servis devre dışı: önce başlangıç türünü değiştirin."
+    return m[:200]
+
+
+def _svc_find(name):
+    for r in (CACHE["services"].v or []):
+        if r["name"] == name:
+            return r
+    return None
+
+
+def post_service_action(b):
+    need_admin()
+    name, action = str(b.get("name", "")), str(b.get("action", ""))
+    svc = _svc_find(name)
+    if not svc:
+        return {"ok": False, "error": "Servis bulunamadı (listeyi yenileyin)"}
+    if action not in ("start", "stop", "restart"):
+        return {"ok": False, "error": "Geçersiz eylem"}
+    if action in ("stop", "restart") and name.lower() in PROTECTED_SVC:
+        return {"ok": False, "error": "Bu servis Windows'un çalışması için kritik; Gözcü durdurmaz. Gerekirse Windows 'Hizmetler' (services.msc) kullanın."}
+    cmd = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
+    try:
+        code, _, err = run_ps(
+            "try { Add-Type -AssemblyName System.ServiceProcess -ErrorAction Stop; "
+            "$svc = [System.ServiceProcess.ServiceController]::new($env:GOZCU_SVC); "
+            f"{cmd} -InputObject $svc -ErrorAction Stop }} "
+            "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
+            timeout=120, env_extra={"GOZCU_SVC": name})
+    except subprocess.TimeoutExpired:
+        CACHE["services"].get(True)
+        return {"ok": False, "error": "İşlem zaman aşımına uğradı. Son durumu görmek için listeyi yenileyin."}
+    if code != 0:
+        return {"ok": False, "error": _svc_err(err) or "Eylem başarısız oldu"}
+    tr = {"start": "başlatıldı", "stop": "durduruldu", "restart": "yeniden başlatıldı"}[action]
+    MON.add_event("action", "warn", f"Servis {tr}: {svc['display']} ({name})")
+    CACHE["services"].get(True)
+    return {"ok": True}
+
+
+def post_service_startup(b):
+    need_admin()
+    name, mode = str(b.get("name", "")), str(b.get("mode", ""))
+    svc = _svc_find(name)
+    if not svc:
+        return {"ok": False, "error": "Servis bulunamadı (listeyi yenileyin)"}
+    if mode not in SVC_MODES:
+        return {"ok": False, "error": "Geçersiz başlangıç türü"}
+    if name.lower() in PROTECTED_SVC and mode in ("manual", "disabled"):
+        return {"ok": False, "error": "Bu servis Windows'un çalışması için kritik; Gözcü başlangıç türünü 'El ile' ya da 'Devre dışı' yapmaz."}
+    prev = "delayed" if (svc["start"] == "automatic" and svc.get("delayed")) else svc["start"]
+    r = subprocess.run(["sc.exe", "config", name, "start=", SVC_MODES[mode]], capture_output=True, creationflags=CREATE_NO_WINDOW, timeout=60)
+    if r.returncode != 0:
+        txt = (r.stdout + r.stderr).decode("oem", "replace").strip().splitlines()
+        return {"ok": False, "error": _svc_err(txt[-1] if txt else "") or "Başlangıç türü değiştirilemedi"}
+    _svc_log_add(name, svc["display"], "startup", prev, mode)
+    MON.add_event("action", "warn", f"Servis başlangıç türü değişti: {svc['display']} ({name}): "
+                                    f"{SVC_MODE_TR.get(prev, prev)} → {SVC_MODE_TR[mode]}")
+    CACHE["services"].get(True)
+    return {"ok": True, "prev": prev}
 
 
 def neighbors():
@@ -2378,11 +2495,15 @@ def timed_loop():
 
 def api_startup(q):
     force = q.get("force", ["0"])[0] == "1"
+    part = q.get("part", [""])[0]
+    if part:
+        if part not in ("startup", "tasks", "services"):
+            return {"error": "Geçersiz başlangıç sekmesi"}
+        rows, err = CACHE[part].get(force)
+        return {"rows": rows, "err": err}
     st, e1 = CACHE["startup"].get(force)
     tk, e2 = CACHE["tasks"].get(force)
     sv, e3 = CACHE["services"].get(force)
-    for it in st:
-        pass
     return {"startup": st, "tasks": tk, "services": sv, "err": e1 or e2 or e3}
 
 
@@ -3511,7 +3632,7 @@ GET_ROUTES = {
     "/api/cleanup": api_cleanup,
 }
 POST_ROUTES = {
-    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/trustports/add": post_trustport_add, "/api/trustports/remove": post_trustport_remove, "/api/alerts/dismiss": post_alert_dismiss, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
+    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/service/action": post_service_action, "/api/service/startup": post_service_startup, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/trustports/add": post_trustport_add, "/api/trustports/remove": post_trustport_remove, "/api/alerts/dismiss": post_alert_dismiss, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
     "/api/fw/logging": post_fw_logging, "/api/startup/toggle": post_startup_toggle, "/api/reveal": post_reveal, "/api/scan": post_scan,
     "/api/scan/cancel": post_scan_cancel, "/api/elevate": post_elevate, "/api/alerts/clear": post_clear_alerts,
     "/api/suspend": post_suspend, "/api/priority": post_priority, "/api/baseline/save": post_baseline_save,
@@ -3653,6 +3774,7 @@ def main():
     if GEO is not None:
         GEO.start()
     _sup_load()
+    _svc_log_load()
     _fwchg_load()
     _tp_load()
     _timed_load()

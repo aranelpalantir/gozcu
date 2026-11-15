@@ -1185,17 +1185,22 @@ async function loadFw(force){
   loadFwHealth(force); loadFwBackups();
 }
 const HL={bad:["bad","Yüksek"],warn:["warn","Orta"],info:["info","Bilgi"]};
+let FWH_SIG="";
 async function loadFwHealth(force){
   const r=await api("/api/fwhealth"+(force?"?force=1":"")); const el=$("#fwhealth");
+  const sig=JSON.stringify(r); if(!force && sig===FWH_SIG && el.querySelector("details")) return;   // veri değişmediyse yeniden çizme (açık bölümler kapanmasın)
+  FWH_SIG=sig;
+  const paint=html=>{ const open=new Set([...el.querySelectorAll("details[open] summary b")].map(b=>b.textContent));
+    el.innerHTML=html; el.querySelectorAll("details").forEach(d=>{ const b=d.querySelector("summary b"); if(b&&open.has(b.textContent)) d.open=true; }); };
   const f=r.findings||[], c=r.counts||{};
   const head=`<h3>Kural sağlığı <span class="r muted">${r.rules||0} kural tarandı${f.length?` · ${c.bad?c.bad+" yüksek, ":""}${c.warn?c.warn+" orta, ":""}${c.info||0} bilgi`:""}</span></h3>`;
-  if(!f.length){ el.innerHTML=head+`<div class="check"><div class="ic ok">✓</div><div><b>Belirgin bir sorun bulunmadı</b><p>Geniş izinler, çakışmalar, şüpheli klasör kuralları veya kapalı profil tespit edilmedi.</p></div></div>`; return; }
-  el.innerHTML=head+f.map(x=>{ const [cls,lbl]=HL[x.level]||["info","Bilgi"];
+  if(!f.length){ paint(head+`<div class="check"><div class="ic ok">✓</div><div><b>Belirgin bir sorun bulunmadı</b><p>Geniş izinler, çakışmalar, şüpheli klasör kuralları veya kapalı profil tespit edilmedi.</p></div></div>`); return; }
+  paint(head+f.map(x=>{ const [cls,lbl]=HL[x.level]||["info","Bilgi"];
     return `<details class="fwf"><summary><span class="tag ${cls==="bad"?"bad":cls}">${lbl}</span> <b>${esc(x.title)}</b></summary>
       <p class="muted" style="margin:6px 0 6px 2px">${esc(x.detail)}</p>
       ${x.items.length?`<div style="max-height:230px;overflow:auto;margin:0 0 8px 2px">${x.items.map((t,i)=>{ const rf=(x.refs||[])[i];
         const btns = rf && ADMIN ? ` <button class="sm" data-fwdis="${esc(rf.n)}" data-d="${rf.d}">Devre dışı bırak</button>${x.scope&&rf.d==="in"?` <button class="sm" data-fwscope="${esc(rf.n)}" data-d="${rf.d}" title="Uzak adresi yalnızca verdiğiniz aralıklarla sınırla (ör. Tailscale)">Adresi sınırla</button>`:""}` : "";
-        return `<div class="fwi"><span class="mono muted" style="font-size:11.5px">${esc(t)}</span>${btns}</div>`; }).join("")}${x.n>x.items.length?`<div class="muted" style="font-size:12px">… ve ${x.n-x.items.length} tane daha (Kurallar tablosundan yönetebilirsiniz)</div>`:""}</div>`:""}</details>`; }).join("");
+        return `<div class="fwi"><span class="mono muted" style="font-size:11.5px">${esc(t)}</span>${btns}</div>`; }).join("")}${x.n>x.items.length?`<div class="muted" style="font-size:12px">… ve ${x.n-x.items.length} tane daha (Kurallar tablosundan yönetebilirsiniz)</div>`:""}</div>`:""}</details>`; }).join(""));
 }
 async function fwRuleToggle(name,dir,enable){
   const same = FWDATA&&FWDATA.rules ? FWDATA.rules.filter(r=>r.name===name&&r.dir===dir).length : 1;

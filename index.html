@@ -305,6 +305,7 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
 
     <!-- PORTLAR -->
     <section class="page" id="p-ports">
+      <div id="portattn" style="margin-bottom:14px"></div>
       <div class="grid kpis" id="portkpis" style="margin-bottom:14px"></div>
       <div class="toolbar">
         <input type="search" id="portq" placeholder="Port, servis, işlem ara…">
@@ -320,6 +321,7 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
     <section class="page" id="p-feed">
       <div class="subtabs" id="feedtabs"><a data-t="ev" class="on">Olaylar ve uyarılar</a><a data-t="fw">Güvenlik duvarı logu</a><a data-t="etw">Ağ trafiği (işlem bazlı)</a><a data-t="hist">Trafik geçmişi</a><a data-t="dns">DNS sorguları</a><a data-t="ahist">Uyarı geçmişi</a></div>
       <div id="feed-ev">
+        <div id="actalerts"></div>
         <div class="toolbar">
           <div class="chips" id="evchips"></div>
           <input type="search" id="evq" placeholder="Olaylarda ara…">
@@ -624,7 +626,7 @@ function route(){ const id=(location.hash||"#overview").slice(1); CUR=PAGES.find
   $$("nav a").forEach(a=>a.classList.toggle("on",a.dataset.p===CUR)); $$(".page").forEach(p=>p.classList.toggle("on",p.id==="p-"+CUR));
   const pg=PAGES.find(p=>p[0]===CUR); $("#ptitle").textContent=pg[1]; $("#psub").textContent=pg[2]; $("#main").scrollTop=0; refreshPage(true); }
 window.addEventListener("hashchange", route);
-function setBadge(id, n, cls){ const b=$("#b-"+id); if(!b) return; b.style.display=n?"":"none"; b.textContent=n; b.className="badge "+(cls||""); }
+function setBadge(id, n, cls, title){ const b=$("#b-"+id); if(!b) return; b.style.display=n?"":"none"; b.textContent=n; b.className="badge "+(cls||""); if(title) b.title=title; }
 
 /* ---------- tablo bileşeni ---------- */
 const TS = {};
@@ -942,7 +944,16 @@ function renderPorts(){
   const k=[["Dinleyen (toplam)",PORTS.length,""],["Dış ağa açık",exp.length,exp.length?"warn":"ok"],["Yüksek risk",exp.filter(p=>p.risk==="high").length,exp.some(p=>p.risk==="high")?"bad":"ok"],
     ["Orta risk",exp.filter(p=>p.risk==="medium").length,""],["Güvenlik duvarında izinli",exp.filter(p=>p.fw==="allowed").length,""],["Yalnız yerel",PORTS.length-exp.length,""]];
   $("#portkpis").innerHTML=k.map(([l,v,c])=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`).join("");
+  /* menüdeki rozetle aynı kural: dışa açık, yüksek/orta riskli, port başına tek satır (TCP) */
+  const att=[], seenp=new Set();
+  PORTS.filter(p=>p.proto==="TCP"&&p.exposed&&(p.risk==="high"||p.risk==="medium")).sort((a,b)=>RV[b.risk]-RV[a.risk]||a.lport-b.lport)
+    .forEach(p=>{ if(!seenp.has(p.lport)){ seenp.add(p.lport); att.push(p); } });
+  $("#portattn").innerHTML = att.length ? `<div class="card"><h3>Dikkat gerektirenler (${att.length}) <span class="r muted">menüdeki rozet bu sayıyı gösterir</span></h3>`
+    + att.map(p=>`<div class="fwi"><span>${RISK[p.risk]}</span><span style="flex:1"><b class="mono">TCP ${p.lport}</b> ${esc(p.svc_name||"")} · <b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> · güvenlik duvarı: ${FW[p.fw]||esc(p.fw)}<br><span class="muted" style="font-size:12px">${esc(p.why||"")}</span></span>
+      <button class="sm" data-pshow="${p.lport}">Tabloda göster</button> <button class="sm" onclick="blockPort(${p.lport},'TCP')">Gelenleri engelle</button></div>`).join("")+`</div>`
+    : `<div class="check"><div class="ic ok">✓</div><div><b>Dikkat gerektiren port yok</b><p>Dışa açık yüksek/orta riskli TCP port görünmüyor.</p></div></div>`;
 }
+$("#portattn").addEventListener("click",e=>{ const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portexp").checked=true; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
 ["#portq","#portexp","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
 
 /* ================= CANLI AKIŞ ================= */
@@ -1159,6 +1170,26 @@ function renderAhist(){ if(!AH) return; const q=$("#ahq").value.toLowerCase();
   ], rows, {sort:"t",max:1500,empty:"Kayıtlı uyarı yok"});
   $("#ahcount").textContent=`${n} uyarı`; }
 $("#ahdays").addEventListener("change",()=>{ AH=null; loadAhist(); }); $("#ahq").addEventListener("input",renderAhist);
+
+let ACT_SIG="";
+async function loadActAlerts(){
+  const r=await api("/api/alerts"), al=r.alerts||[]; const sig=JSON.stringify(al.map(a=>a.id)); const el=$("#actalerts"); if(!el) return;
+  setBadge("feed", al.length||"", al.some(a=>a.level==="high")?"bad":"warn");
+  if(sig===ACT_SIG && el.innerHTML) return; ACT_SIG=sig;
+  if(!al.length){ el.innerHTML=`<div class="check" style="margin-bottom:12px"><div class="ic ok">✓</div><div><b>Aktif uyarı yok</b><p>Yeni uyarılar burada, listenin en üstünde görünür. Alttaki akış, uyarılar dahil tüm olayların kaydıdır.</p></div></div>`; return; }
+  el.innerHTML=`<div class="card" style="margin-bottom:14px"><h3>Aktif uyarılar (${al.length}) <span class="r muted">menüdeki rozet bu sayıyı gösterir</span> <button class="sm" id="actclear" style="margin-left:8px">Hepsini temizle</button></h3>`
+    + al.map(a=>`<div class="fwi" style="align-items:flex-start"><span class="tag ${a.level==="high"?"bad":"warn"}">${a.level==="high"?"Yüksek":"Orta"}</span>
+      <span style="flex:1;min-width:220px"><span class="dim mono">${dt(a.t)}</span><br>${esc(a.msg)}</span>
+      <span style="white-space:nowrap">${a.pid?`<button class="sm" data-actopen="${a.pid}" data-t="${a.t}">İşlemi aç</button> `:""}${a.cat&&a.name?`<button class="sm" data-actsup="${esc(a.cat)}" data-n="${esc(a.name)}" data-p="${esc(a.parent||"")}" data-m="${esc((a.msg||"").slice(0,160))}">Sustur</button> `:""}<button class="sm" data-actdis="${a.id}">Tamam</button></span></div>`).join("")+`</div>`;
+}
+document.addEventListener("click",async e=>{
+  const o=e.target.closest("[data-actopen]"), s=e.target.closest("[data-actsup]"), d=e.target.closest("[data-actdis]"), c=e.target.closest("#actclear");
+  if(!(o||s||d||c)) return;
+  if(o) openProc(+o.dataset.actopen, +o.dataset.t);
+  else if(s) suppressAlert(s.dataset.actsup,s.dataset.n,s.dataset.m,s.dataset.p);
+  else if(d){ await post("/api/alerts/dismiss",{id:+d.dataset.actdis}); ACT_SIG=""; loadActAlerts(); }
+  else if(c){ if(!await uiConfirm("Tüm aktif uyarılar temizlensin mi? Uyarı geçmişi sekmesinde kayıtları durur.",{title:"Uyarıları temizle",ok:"Temizle",danger:false})) return; await post("/api/alerts/clear",{}); ACT_SIG=""; loadActAlerts(); }
+});
 
 /* ================= GÜVENLİK DUVARI ================= */
 let FWDATA=null;
@@ -1457,7 +1488,7 @@ async function refreshPage(first){
     else if(CUR==="procs"){ if(first||!PAUSED){ const d=await api("/api/processes"); PROCS=d.procs; } renderProcs(); }
     else if(CUR==="conns"){ if(first||!PAUSED){ const d=await api("/api/connections"); CONNS=d.conns; } renderConns(); }
     else if(CUR==="ports"){ if(first||!PAUSED){ const d=await api("/api/ports"); PORTS=d.ports; } renderPorts(); }
-    else if(CUR==="feed"){ if($("#feed-ahist").style.display!=="none"){ await loadAhist(); } else if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none") renderFeed(); else { await pollFwLog(); renderFwLog(); } }
+    else if(CUR==="feed"){ if($("#feed-ahist").style.display!=="none"){ await loadAhist(); } else if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none"){ renderFeed(); await loadActAlerts(); } else { await pollFwLog(); renderFwLog(); } }
     else if(CUR==="fw"){ if(first&&!FWDATA) await loadFw(); else renderRules(); }
     else if(CUR==="net"){ if(first) await loadNet(); }
     else if(CUR==="startup"){ if(first&&!STDATA) await loadStartup(); else renderStartup(); }
@@ -1477,8 +1508,8 @@ async function tick(){
       $("#elevate").style.display=OV.admin?"none":""; paintNetcut();
       $("#uptime").textContent = "Açılıştan beri "+dur(OV.now-OV.boot);
       const c=OV.counts;
-      setBadge("feed", c.alerts||"", c.alerts_high?"bad":"warn");
-      setBadge("ports", c.risky||"", "warn");
+      setBadge("feed", c.alerts||"", c.alerts_high?"bad":"warn", `${c.alerts||0} aktif uyarı — Canlı Akış sayfasının en üstünde "Aktif uyarılar" olarak listelenir`);
+      setBadge("ports", c.risky||"", "warn", `${c.risky||0} riskli port — Açık Portlar sayfasının en üstünde "Dikkat gerektirenler" olarak listelenir`);
       setBadge("procs", c.unsigned||"", "warn");
       await pollEvents();
       if(CUR==="net" && tickN%3===0) await loadNet();

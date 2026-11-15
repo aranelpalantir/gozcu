@@ -3105,6 +3105,17 @@ def post_clear_alerts(b):
     return {"ok": True}
 
 
+def api_alerts(q):
+    """Aktif (henüz temizlenmemiş) uyarılar, en yeni üstte: menüdeki Canlı Akış rozetinin sayısı."""
+    return {"alerts": [dict(a) for a in list(MON.alerts)[::-1][:100]]}
+
+
+def post_alert_dismiss(b):
+    aid = int(b.get("id", 0) or 0)
+    MON.alerts = deque((a for a in MON.alerts if a["id"] != aid), maxlen=500)
+    return {"ok": True}
+
+
 # ---- Değişiklik tespiti: "referans" anı ile şimdiki durumu karşılaştır
 BASELINE_FILE = os.path.join(APP_DIR, "baseline.json")
 BASE_LABELS = {"startup": "Başlangıç öğesi", "tasks": "Zamanlanmış görev", "services": "Servis",
@@ -3314,11 +3325,11 @@ GET_ROUTES = {
     "/api/connections": api_connections, "/api/ports": api_ports, "/api/events": api_events,
     "/api/firewall": api_firewall, "/api/fwlog": api_fwlog, "/api/etw": api_etw, "/api/etwhist": api_etwhist, "/api/etwproc": api_etwproc, "/api/etwdns": api_etwdns, "/api/timeline": api_timeline, "/api/fwhealth": api_fwhealth, "/api/notify": api_notify, "/api/fwbackups": api_fwbackups,"/api/startup": api_startup,
     "/api/network": api_network, "/api/security": api_security, "/api/scan": api_scan_status,
-    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/suppress": api_suppress, "/api/alerthistory": api_alerthistory, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
+    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/suppress": api_suppress, "/api/alerts": api_alerts, "/api/alerthistory": api_alerthistory, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
     "/api/cleanup": api_cleanup,
 }
 POST_ROUTES = {
-    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
+    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/alerts/dismiss": post_alert_dismiss, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
     "/api/fw/logging": post_fw_logging, "/api/startup/toggle": post_startup_toggle, "/api/reveal": post_reveal, "/api/scan": post_scan,
     "/api/scan/cancel": post_scan_cancel, "/api/elevate": post_elevate, "/api/alerts/clear": post_clear_alerts,
     "/api/suspend": post_suspend, "/api/priority": post_priority, "/api/baseline/save": post_baseline_save,

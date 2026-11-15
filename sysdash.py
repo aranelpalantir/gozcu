@@ -1903,6 +1903,31 @@ def post_trustport_remove(b):
     return {"ok": True}
 
 
+# ---- Gozcu uzerinden yapilan kural degisikliklerinin kaydi (kural adi, yon) -> son degisiklik
+FWCHG_FILE = os.path.join(APP_DIR, "fw_changes.json")
+GOZCU_CHANGES = {}
+
+
+def _fwchg_load():
+    try:
+        with open(FWCHG_FILE, "r", encoding="utf-8") as f:
+            for r in json.load(f):
+                GOZCU_CHANGES[(r["name"].lower(), r["dir"])] = r
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+def _fwchg_add(name, direction, action, remote=""):
+    direction = "in" if direction == "in" else "out"
+    GOZCU_CHANGES[(str(name).lower(), direction)] = {"name": str(name), "dir": direction, "action": action,
+                                                     "remote": remote, "t": time.time()}
+    try:
+        with open(FWCHG_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(GOZCU_CHANGES.values()), f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def _port_match(spec, port):
     if spec in ("*", "", None):
         return True
@@ -2044,6 +2069,11 @@ def compute_ports(fw):
             fws, fwr = "unknown", []      # kurallar okunamadi: durumu bilmiyoruz, riski dusurme
         else:
             fws, fwr = fw_classify(fw, c["proto"], c["lport"], c["exe"])
+        gz = None
+        for rn in fwr:
+            gz = GOZCU_CHANGES.get((rn.split(" → ")[0].lower(), "in"))
+            if gz:
+                break
         # reach: portun DISARIDAN gercekten erisilebilir olup olmadigi (dinlemek tek basina risk degildir)
         #   open = herkes (izin kurali var / kurallar okunamadi), limited = belirli adreslerle sinirli,
         #   blocked = guvenlik duvari gelen baglantiyi reddediyor, local = yalniz bu bilgisayar
@@ -2060,7 +2090,7 @@ def compute_ports(fw):
                 risk = {"high": "medium", "medium": "low"}.get(risk, risk)
         s = sig_of(c["exe"])
         rows.append({**c, "svc_name": info[0] if info else "", "risk": risk, "why": info[2] if info else "",
-                     "scope": scope, "exposed": exposed, "fw": fws, "reach": reach, "fw_rules": fwr,
+                     "scope": scope, "exposed": exposed, "fw": fws, "reach": reach, "fw_rules": fwr, "gz": gz,
                      "trusted": _tp_key(c["proto"], c["lport"], c["name"]) in TRUSTPORTS,
                      "sig": s["s"] if s else "",
                      "clients": sum(1 for x in MON.snapshot["conns"] if x["dir"] == "in" and x["lport"] == c["lport"] and x["pid"] == c["pid"])})
@@ -2083,6 +2113,7 @@ def api_firewall(q):
     profs, perr = CACHE["fw_profiles"].get(force)
     rules, rerr = CACHE["fw_rules"].get(force)
     netp, _ = CACHE["net_profiles"].get(force)
+    rules = [{**r, "gz": GOZCU_CHANGES.get((r["name"].lower(), r["dir"]))} for r in (rules or [])]
     return {"profiles": profs, "rules": rules, "net_profiles": netp, "err": perr or rerr,
             "admin": ADMIN, "log_status": MON.fwlog_status, "log_path": MON.fwlog_path}
 
@@ -2848,6 +2879,7 @@ def post_fwrule_toggle(b):
     if not ok:
         return {"ok": False, "error": e}
     FWWATCH["skip"] = True
+    _fwchg_add(b.get("name"), b.get("dir"), "enable" if en else "disable")
     MON.add_event("fwchange", "warn", f'Güvenlik duvarı kuralı {"etkinleştirildi" if en else "devre dışı bırakıldı"}: {b.get("name")}')
     CACHE["fw_rules"].get(True)
     return {"ok": True}
@@ -2870,6 +2902,7 @@ def post_fwrule_scope(b):
     if not ok:
         return {"ok": False, "error": e}
     FWWATCH["skip"] = True
+    _fwchg_add(b.get("name"), b.get("dir"), "scope", ",".join(parts))
     MON.add_event("fwchange", "warn", f'Kuralın uzak adresi sınırlandı: {b.get("name")} → {", ".join(parts)}')
     CACHE["fw_rules"].get(True)
     return {"ok": True}
@@ -3612,6 +3645,7 @@ def main():
     if GEO is not None:
         GEO.start()
     _sup_load()
+    _fwchg_load()
     _tp_load()
     _timed_load()
     trim_alert_log()

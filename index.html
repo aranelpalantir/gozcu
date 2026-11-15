@@ -949,6 +949,38 @@ window.blockPort=blockPort;
 function portAction(p){
   return `<button class="sm" onclick="blockPort(${p.lport},'${p.proto}')" title="Bu porta dışarıdan gelen bağlantıyı güvenlik duvarında engelle">Gelenleri engelle</button>`;
 }
+/* Aynı program + port + işlem için IPv4/IPv6 ve ağ kartı başına ayrı soketleri tek satırda topla */
+function groupPorts(list){
+  const m=new Map();
+  for(const p of list){ const k=[p.proto,p.lport,p.pid,p.reach].join("|"); let g=m.get(k);
+    if(!g){ g={...p, lips:[p.lip], scopes:new Set([p.scope])}; m.set(k,g); }
+    else { if(!g.lips.includes(p.lip)) g.lips.push(p.lip); g.scopes.add(p.scope); g.clients=(g.clients||0)+(p.clients||0); } }
+  return [...m.values()].map(g=>{ g.scope = g.scopes.has("any") ? "any" : (g.scopes.size===1&&g.scopes.has("loopback") ? "loopback" : "nic"); return g; });
+}
+/* Kuralın uzak adreslerini okunur yaz: 100.64.0.0/255.192.0.0 -> 100.64.0.0/10, Tailscale ağı */
+function addrLabel(a){
+  if(!a) return "";
+  const parts=a.split(",").map(x=>x.trim()).filter(Boolean).map(x=>{
+    const m=x.match(/^(\d+\.\d+\.\d+\.\d+)\/(\d+\.\d+\.\d+\.\d+)$/);
+    if(m){ const bits=m[2].split(".").reduce((n,o)=>n+(+o).toString(2).replace(/0/g,"").length,0); return m[1]+"/"+bits; }
+    return x; });
+  const txt=parts.join(", ");
+  return (/(^|,\s*)100\.64\.0\.0\/10|fd7a:115c:a1e0::\/48/.test(txt)?"Tailscale ağı: ":"")+txt;
+}
+function ruleLink(r){ const [n,a]=String(r).split(" → ");
+  return `<span class="sub" title="${esc(r)}"><a href="javascript:void(0)" data-rule="${esc(n)}" title="Güvenlik Duvarı sekmesinde bu kuralı göster">${esc(n)}</a>${a?` → ${esc(addrLabel(a))}`:""}</span>`; }
+function showRule(name){
+  location.hash="#fw";
+  const apply=()=>{ const q=$("#ruleq"); if(!q||!FWDATA) return false; q.value=name; const en=$("#ruleen"); if(en) en.checked=false; renderRules(); return true; };
+  let tries=0; const iv=setInterval(()=>{ tries++; if(apply()||tries>40) clearInterval(iv); },400);   // kurallar yüklenene kadar (en çok ~16 sn) bekle
+}
+const GZ_ACT={scope:"sınırlandı",disable:"devre dışı bırakıldı",enable:"etkinleştirildi"};
+function reachCell(p){
+  const rules=p.fw_rules||[]; let sub="";
+  if(p.reach==="blocked") sub = rules.length ? rules.slice(0,2).map(ruleLink).join("") : '<span class="sub">varsayılan: gelen bağlantı reddedilir</span>';
+  else if(p.reach!=="local") sub = rules.slice(0,2).map(ruleLink).join("")+(rules.length>2?`<span class="sub">+${rules.length-2} kural daha</span>`:"");
+  const gz = p.gz ? `<span class="sub"><span class="tag info" title="Bu kural Gözcü üzerinden ${GZ_ACT[p.gz.action]||p.gz.action}${p.gz.remote?": "+esc(addrLabel(p.gz.remote)):""}">Gözcü ile ${GZ_ACT[p.gz.action]||p.gz.action}</span> ${dt(p.gz.t)}</span>` : "";
+  return reachTag(p)+sub+gz; }
 function reachTag(p){
   if(p.reach==="open") return p.fw==="unknown" ? '<span class="tag warn" title="Güvenlik duvarı kuralları okunamadı; açık varsayıldı">Açık (kural okunamadı)</span>'
     : '<span class="tag warn" title="Güvenlik duvarında bu porta herhangi bir adresten gelen bağlantıya izin veren bir kural var (internet dahil; modeminiz engellemiyorsa)">Açık · internet dahil herkes</span>';
@@ -960,22 +992,23 @@ function renderPorts(){
   const q=$("#portq").value.toLowerCase(), reach=$("#portreach").value, bind=$("#portbind").value, tcp=$("#porttcp").checked;
   const inReach=p=> reach==="" ? true : reach==="open_limited" ? (p.reach==="open"||p.reach==="lan"||p.reach==="limited") : p.reach===reach;
   const inBind=p=> bind==="" ? true : bind==="both" ? p.scope==="any" : bind==="in" ? p.scope==="loopback" : (p.scope!=="any"&&p.scope!=="loopback");
-  const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && inReach(p) && inBind(p) && (!tcp||p.proto==="TCP"));
+  const G=groupPorts(PORTS);
+  const rows = G.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why+" "+p.lips.join(" ")).toLowerCase().includes(q)) && inReach(p) && inBind(p) && (!tcp||p.proto==="TCP"));
   const RV={high:3,medium:2,low:1,none:0};
   const n = table($("#porttable"),"ports",[
     {k:"risk",l:"Risk",s:p=>RV[p.risk],f:p=>RISK[p.risk]},
     {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b> <span class="dim">${p.proto}</span>`+(p.svc_name?`<span class="sub" style="text-align:right">${esc(p.svc_name)}</span>`:"")},
-    {k:"lip",l:"Dinlediği adres",f:p=>`<span class="mono">${esc(p.lip)}</span><span class="sub" title="0.0.0.0 / :: = tüm ağ kartlarında dinler: bu bilgisayardan (127.0.0.1) da, dışarıdan da bağlanılabilir (güvenlik duvarı izin verirse). Belirli bir ağ kartı adresi = yalnızca o adres üzerinden; 127.0.0.1 ile bağlanılamaz. 127.0.0.1 = yalnızca bu bilgisayar.">${p.scope==="any"?"içeriden + dışarıdan (tüm ağ kartları)":p.scope==="loopback"?"yalnız içeriden":"yalnız bu ağ kartı üzerinden"}</span>`},
+    {k:"lip",l:"Dinlediği adres",f:p=>`<span class="mono" title="${esc(p.lips.join(", "))}">${esc(p.lips[0])}${p.lips.length>1?` <span class="dim">+${p.lips.length-1}</span>`:""}</span><span class="sub" title="0.0.0.0 / :: = tüm ağ kartlarında dinler: bu bilgisayardan (127.0.0.1) da, dışarıdan da bağlanılabilir (güvenlik duvarı izin verirse). Belirli bir ağ kartı adresi = yalnızca o adres üzerinden; 127.0.0.1 ile bağlanılamaz. 127.0.0.1 = yalnızca bu bilgisayar.">${p.scope==="any"?"içeriden + dışarıdan (tüm ağ kartları)":p.scope==="loopback"?"yalnız içeriden":"yalnız bu ağ kartı üzerinden"}</span>`},
     {k:"name",l:"İşlem",f:p=>`<b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> ${p.sig==="NotSigned"?sigTag("NotSigned"):""}`},
-    {k:"reach",l:"Dışarıdan erişim",s:p=>({open:0,lan:1,limited:2,blocked:3,local:4}[p.reach]),f:reachTag,t:p=>(p.fw_rules||[]).join(" | ")},
+    {k:"reach",l:"Dışarıdan erişim",s:p=>({open:0,lan:1,limited:2,blocked:3,local:4}[p.reach]),cls:"wrap",f:reachCell,t:p=>(p.fw_rules||[]).join(" | ")},
     {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
     {k:"why",l:"Neden önemli",f:p=>(p.trusted?'<span class="tag ok" title="Güvenilir olarak işaretlendi: rozete ve karta sayılmaz">Güvenilir</span> ':"")+(p.reach==="open"||p.reach==="limited"?`<span class="muted">${esc(p.why)}</span>`:'<span class="dim">–</span>'),t:p=>p.why},
     {k:"_a",l:"",f:p=>p.reach==="open"?portAction(p):""},
   ], rows, {sort:"risk", click:p=>p.pid&&openProc(p.pid),
     empty: reach==="open_limited"||reach==="open"||reach==="lan" ? "✓ Dışarıdan erişilebilir port yok. Güvenlik duvarının engellediği portları görmek için üstteki filtreyi değiştirin." : "Kayıt yok"});
-  $("#portcount").textContent=`${n} / ${PORTS.length} dinleyen soket`;
-  const cnt=r=>PORTS.filter(p=>p.reach===r).length, open=PORTS.filter(p=>p.reach==="open");
-  const k=[["Dinleyen port (toplam)",PORTS.length,"","","Tümünü göster"],
+  $("#portcount").textContent=`${n} / ${G.length} dinleyen port`;
+  const cnt=r=>G.filter(p=>p.reach===r).length, open=G.filter(p=>p.reach==="open");
+  const k=[["Dinleyen port (toplam)",G.length,"","","Tümünü göster"],
     ["Her adresten erişilebilir",open.length,open.length?"warn":"ok","open","Güvenlik duvarının her adresten (internet dahil) izin verdiği portlar"],
     ["Bunların riskli olanı",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Her adresten erişilebilen portlardan, bilinen saldırı geçmişi olan servisler (RDP, SMB, Telnet, VNC, DNS…). Güvenilir işaretlediğiniz portlar sayılmaz."],
     ["Yalnız yerel ağdan",cnt("lan"),"","lan","İzin kuralı yalnızca yerel ağ adreslerine (ev/ofis ağı) izin veriyor"],
@@ -1003,7 +1036,8 @@ async function showTrustedPorts(){
     box.innerHTML=(r.rules||[]).length ? r.rules.map(x=>`<div class="fwi"><span style="flex:1"><b class="mono">${esc(x.proto)} ${x.port}</b> · ${esc(x.name)}</span><button class="sm" data-tpdel="${esc(x.proto)}|${x.port}|${esc(x.name.toLowerCase())}">Geri al</button></div>`).join("") : '<div class="muted">Güvenilir olarak işaretlenmiş port yok.</div>'; };
   await uiAsk({title:"Güvenilir portlar",text:"Bu portlar rozete ve \"Dikkat gerektirenler\" kartına sayılmaz.",html:'<div id="tplist" style="margin-top:12px;max-height:300px;overflow:auto"></div>',ok:"Kapat",nocancel:true,
     mount:ov=>{ render(ov); ov.addEventListener("click",async e=>{ const b=e.target.closest("[data-tpdel]"); if(!b) return; await post("/api/trustports/remove",{key:b.dataset.tpdel}); render(ov); refreshPage(true); }); }}); }
-$("#portattn").addEventListener("click",e=>{ const t=e.target.closest("[data-ptrust]"); if(t){ trustPort(t.dataset.ptrust); return; } if(e.target.closest("[data-ptmanage]")){ showTrustedPorts(); return; } const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portreach").value="open"; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
+$("#porttable").addEventListener("click",e=>{ const r=e.target.closest("[data-rule]"); if(r){ e.preventDefault(); showRule(r.dataset.rule); } });
+$("#portattn").addEventListener("click",e=>{ const rl=e.target.closest("[data-rule]"); if(rl){ showRule(rl.dataset.rule); return; } const t=e.target.closest("[data-ptrust]"); if(t){ trustPort(t.dataset.ptrust); return; } if(e.target.closest("[data-ptmanage]")){ showTrustedPorts(); return; } const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portreach").value="open"; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
 $("#portkpis").addEventListener("click",e=>{ const c=e.target.closest("[data-reach]"); if(c){ $("#portreach").value=c.dataset.reach; $("#portbind").value=""; $("#portq").value=""; renderPorts(); } });
 ["#portq","#portreach","#portbind","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
 
@@ -1325,7 +1359,7 @@ function renderRules(){
     && (!op||(r.dir==="in"&&r.action==="allow"&&r.raddr==="*"&&r.enabled)));
   const n = table($("#ruletable"),"rules",[
     {k:"enabled",l:"Etkin",f:r=>r.enabled?'<span class="ok">●</span>':'<span class="dim">○</span>'},
-    {k:"name",l:"Ad",f:r=>`<b>${esc(r.name)}</b>`,t:r=>r.name},
+    {k:"name",l:"Ad",f:r=>`<b>${esc(r.name)}</b>`+(r.gz?` <span class="tag info" title="${esc("Bu kural Gözcü üzerinden "+(GZ_ACT[r.gz.action]||r.gz.action)+(r.gz.remote?": "+addrLabel(r.gz.remote):"")+" · "+dt(r.gz.t))}">Gözcü: ${GZ_ACT[r.gz.action]||r.gz.action}</span>`:""),t:r=>r.name},
     {k:"dir",l:"Yön",f:r=>r.dir==="in"?DIR.in:DIR.out},
     {k:"action",l:"Eylem",f:r=>r.action==="allow"?'<span class="tag ok">İzin</span>':'<span class="tag bad">Engel</span>'},
     {k:"proto",l:"Prot."},

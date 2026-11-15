@@ -922,6 +922,12 @@ let PORTS=[];
 async function blockPort(port, proto){ if(!await uiConfirm(`Gelen ${proto} ${port} portu güvenlik duvarında engellensin mi? (Bu portu kullanan uygulama dışarıdan erişilemez hale gelir.)`)) return;
   const r=await post("/api/block",{kind:"port",value:String(port),proto,dir:"in"}); r.ok?toast(`Port ${port} engellendi`):toast(r.error,1); }
 window.blockPort=blockPort;
+/* Gelenleri engelle düğmesi yalnızca port gerçekten güvenlik duvarında açıksa anlamlı */
+function portAction(p){
+  if(p.fw==="default"||p.fw==="blocked") return '<span class="tag ok" title="Güvenlik duvarı bu porta gelen bağlantıyı zaten reddediyor; yeni kural eklemek bir şey değiştirmez">Zaten engelli · işlem gerekmez</span>';
+  if(p.fw==="restricted") return '<span class="tag ok" title="İzin kuralı yalnızca belirli uzak adreslerle sınırlı">Kısıtlı · işlem gerekmez</span>';
+  return `<button class="sm" onclick="blockPort(${p.lport},'${p.proto}')">Gelenleri engelle</button>`;
+}
 function renderPorts(){
   const q=$("#portq").value.toLowerCase(), ex=$("#portexp").checked, tcp=$("#porttcp").checked;
   const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && (!ex||p.exposed) && (!tcp||p.proto==="TCP"));
@@ -937,7 +943,7 @@ function renderPorts(){
     {k:"fw",l:"Güvenlik duvarı",f:p=>FW[p.fw]||"",t:p=>(p.fw_rules||[]).join(" | ")},
     {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
     {k:"why",l:"Neden önemli",f:p=>`<span class="muted">${esc(p.why)}</span>`,t:p=>p.why},
-    {k:"_a",l:"",f:p=>p.exposed?`<button class="sm" onclick="blockPort(${p.lport},'${p.proto}')">Gelenleri engelle</button>`:""},
+    {k:"_a",l:"",f:p=>p.exposed?portAction(p):""},
   ], rows, {sort:"risk", click:p=>p.pid&&openProc(p.pid)});
   $("#portcount").textContent=`${n} / ${PORTS.length} dinleyen soket`;
   const exp=PORTS.filter(p=>p.exposed);
@@ -948,9 +954,9 @@ function renderPorts(){
   const att=[], seenp=new Set();
   PORTS.filter(p=>p.proto==="TCP"&&p.exposed&&(p.risk==="high"||p.risk==="medium")).sort((a,b)=>RV[b.risk]-RV[a.risk]||a.lport-b.lport)
     .forEach(p=>{ if(!seenp.has(p.lport)){ seenp.add(p.lport); att.push(p); } });
-  $("#portattn").innerHTML = att.length ? `<div class="card"><h3>Dikkat gerektirenler (${att.length}) <span class="r muted">menüdeki rozet bu sayıyı gösterir</span></h3>`
+  $("#portattn").innerHTML = att.length ? `<div class="card"><h3>Dikkat gerektirenler (${att.length}) <span class="r muted">dışa açık · yüksek/orta riskli · TCP</span></h3>`
     + att.map(p=>`<div class="fwi"><span>${RISK[p.risk]}</span><span style="flex:1"><b class="mono">TCP ${p.lport}</b> ${esc(p.svc_name||"")} · <b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> · güvenlik duvarı: ${FW[p.fw]||esc(p.fw)}<br><span class="muted" style="font-size:12px">${esc(p.why||"")}</span></span>
-      <button class="sm" data-pshow="${p.lport}">Tabloda göster</button> <button class="sm" onclick="blockPort(${p.lport},'TCP')">Gelenleri engelle</button></div>`).join("")+`</div>`
+      <button class="sm" data-pshow="${p.lport}">Tabloda göster</button> ${portAction(p)}</div>`).join("")+`</div>`
     : `<div class="check"><div class="ic ok">✓</div><div><b>Dikkat gerektiren port yok</b><p>Dışa açık yüksek/orta riskli TCP port görünmüyor.</p></div></div>`;
 }
 $("#portattn").addEventListener("click",e=>{ const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portexp").checked=true; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
@@ -1177,7 +1183,7 @@ async function loadActAlerts(){
   setBadge("feed", al.length||"", al.some(a=>a.level==="high")?"bad":"warn");
   if(sig===ACT_SIG && el.innerHTML) return; ACT_SIG=sig;
   if(!al.length){ el.innerHTML=`<div class="check" style="margin-bottom:12px"><div class="ic ok">✓</div><div><b>Aktif uyarı yok</b><p>Yeni uyarılar burada, listenin en üstünde görünür. Alttaki akış, uyarılar dahil tüm olayların kaydıdır.</p></div></div>`; return; }
-  el.innerHTML=`<div class="card" style="margin-bottom:14px"><h3>Aktif uyarılar (${al.length}) <span class="r muted">menüdeki rozet bu sayıyı gösterir</span> <button class="sm" id="actclear" style="margin-left:8px">Hepsini temizle</button></h3>`
+  el.innerHTML=`<div class="card" style="margin-bottom:14px"><h3>Aktif uyarılar (${al.length}) <span class="r muted">henüz temizlenmemiş uyarılar</span> <button class="sm" id="actclear" style="margin-left:8px">Hepsini temizle</button></h3>`
     + al.map(a=>`<div class="fwi" style="align-items:flex-start"><span class="tag ${a.level==="high"?"bad":"warn"}">${a.level==="high"?"Yüksek":"Orta"}</span>
       <span style="flex:1;min-width:220px"><span class="dim mono">${dt(a.t)}</span><br>${esc(a.msg)}</span>
       <span style="white-space:nowrap">${a.pid?`<button class="sm" data-actopen="${a.pid}" data-t="${a.t}">İşlemi aç</button> `:""}${a.cat&&a.name?`<button class="sm" data-actsup="${esc(a.cat)}" data-n="${esc(a.name)}" data-p="${esc(a.parent||"")}" data-m="${esc((a.msg||"").slice(0,160))}">Sustur</button> `:""}<button class="sm" data-actdis="${a.id}">Tamam</button></span></div>`).join("")+`</div>`;

@@ -312,12 +312,13 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
 
     <!-- PORTLAR -->
     <section class="page" id="p-ports">
-      <p class="muted" style="margin:0 0 12px;font-size:12.5px;max-width:900px">Bir program port açınca o port <b>dinliyor</b> sayılır; bu her bilgisayarda normaldir. Ama <b>güvenlik duvarı izin vermedikçe dışarıdan erişilemez</b>. Asıl dikkat edilecekler <b>"Dışarıdan erişilebilir"</b> olanlardır; güvenlik duvarının engellediği portlar zararsızdır.</p>
+      <p class="muted" style="margin:0 0 12px;font-size:12.5px;max-width:900px">Bir program port açınca o port <b>dinliyor</b> sayılır; bu her bilgisayarda normaldir. Ama <b>güvenlik duvarı izin vermedikçe dışarıdan erişilemez</b>. Asıl dikkat edilecekler <b>"Dışarıdan erişilebilir"</b> olanlardır; güvenlik duvarının engellediği portlar zararsızdır. "Dışarıdan" = başka bir cihaz (yerel ağdaki telefon/bilgisayar ya da internet); hangisi olduğunu "Dışarıdan erişim" sütunu ve filtreler ayırır. Tüm ağ kartlarında dinleyen portlara bu bilgisayardan da, dışarıdan da bağlanılabilir.</p>
       <div id="portattn" style="margin-bottom:14px"></div>
       <div class="grid kpis" id="portkpis" style="margin-bottom:14px"></div>
       <div class="toolbar">
         <input type="search" id="portq" placeholder="Port, servis, işlem ara…">
-        <select id="portreach" title="Portun dışarıdan erişilebilir olup olmadığına göre süz"><option value="open_limited" selected>Dışarıdan erişilebilir + kısıtlı</option><option value="open">Yalnız dışarıdan erişilebilir</option><option value="limited">Kısıtlı erişim</option><option value="blocked">Güvenlik duvarı engelliyor (zararsız)</option><option value="local">Yalnız bu bilgisayar</option><option value="">Tümü</option></select>
+        <select id="portreach" title="Portun dışarıdan erişilebilir olup olmadığına göre süz"><option value="open_limited" selected>Dışarıdan erişilebilir (hepsi)</option><option value="open">Her adresten (internet dahil)</option><option value="lan">Yalnız yerel ağdan (ev/ofis ağı)</option><option value="limited">Kısıtlı (belirli adresler, ör. Tailscale)</option><option value="blocked">Güvenlik duvarı engelliyor (zararsız)</option><option value="local">Yalnız bu bilgisayar</option><option value="">Tümü</option></select>
+        <select id="portbind" title="Portun hangi ağ kartlarında dinlediğine göre süz"><option value="">Dinleme: tümü</option><option value="both">Hem içeriden hem dışarıdan (tüm ağ kartları)</option><option value="nic">Yalnız belirli bir ağ kartı üzerinden</option><option value="in">Yalnız içeriden (bu bilgisayar)</option></select>
         <label class="chk"><input type="checkbox" id="porttcp"> Sadece TCP</label>
         <span class="grow"></span><span class="count" id="portcount"></span>
       </div>
@@ -950,31 +951,34 @@ function portAction(p){
 }
 function reachTag(p){
   if(p.reach==="open") return p.fw==="unknown" ? '<span class="tag warn" title="Güvenlik duvarı kuralları okunamadı; açık varsayıldı">Açık (kural okunamadı)</span>'
-    : '<span class="tag warn" title="Güvenlik duvarında bu porta gelen bağlantıya izin veren bir kural var">Açık · herkes erişebilir</span>';
+    : '<span class="tag warn" title="Güvenlik duvarında bu porta herhangi bir adresten gelen bağlantıya izin veren bir kural var (internet dahil; modeminiz engellemiyorsa)">Açık · internet dahil herkes</span>';
+  if(p.reach==="lan") return '<span class="tag info" title="İzin kuralı yalnızca yerel ağ adreslerine (ev/ofis ağınız) izin veriyor; internetten erişilemez">Yalnız yerel ağdan</span>';
   if(p.reach==="limited") return '<span class="tag ok" title="İzin kuralı yalnızca belirli uzak adreslerle sınırlı (ör. Tailscale)">Kısıtlı · belirli adresler</span>';
   if(p.reach==="blocked") return '<span class="tag ok" title="Program dinliyor ama güvenlik duvarı gelen bağlantıyı reddediyor">Kapalı · güvenlik duvarı engelliyor</span>';
   return '<span class="tag">Yalnız bu bilgisayar</span>'; }
 function renderPorts(){
-  const q=$("#portq").value.toLowerCase(), reach=$("#portreach").value, tcp=$("#porttcp").checked;
-  const inReach=p=> reach==="" ? true : reach==="open_limited" ? (p.reach==="open"||p.reach==="limited") : p.reach===reach;
-  const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && inReach(p) && (!tcp||p.proto==="TCP"));
+  const q=$("#portq").value.toLowerCase(), reach=$("#portreach").value, bind=$("#portbind").value, tcp=$("#porttcp").checked;
+  const inReach=p=> reach==="" ? true : reach==="open_limited" ? (p.reach==="open"||p.reach==="lan"||p.reach==="limited") : p.reach===reach;
+  const inBind=p=> bind==="" ? true : bind==="both" ? p.scope==="any" : bind==="in" ? p.scope==="loopback" : (p.scope!=="any"&&p.scope!=="loopback");
+  const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && inReach(p) && inBind(p) && (!tcp||p.proto==="TCP"));
   const RV={high:3,medium:2,low:1,none:0};
   const n = table($("#porttable"),"ports",[
     {k:"risk",l:"Risk",s:p=>RV[p.risk],f:p=>RISK[p.risk]},
     {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b> <span class="dim">${p.proto}</span>`+(p.svc_name?`<span class="sub" style="text-align:right">${esc(p.svc_name)}</span>`:"")},
-    {k:"lip",l:"Dinlediği adres",f:p=>`<span class="mono">${esc(p.lip)}</span><span class="sub">${p.scope==="any"?"tüm ağ kartlarında":p.scope==="loopback"?"yalnız bu bilgisayarda":"yalnız bu ağ kartında"}</span>`},
+    {k:"lip",l:"Dinlediği adres",f:p=>`<span class="mono">${esc(p.lip)}</span><span class="sub" title="0.0.0.0 / :: = tüm ağ kartlarında dinler: bu bilgisayardan (127.0.0.1) da, dışarıdan da bağlanılabilir (güvenlik duvarı izin verirse). Belirli bir ağ kartı adresi = yalnızca o adres üzerinden; 127.0.0.1 ile bağlanılamaz. 127.0.0.1 = yalnızca bu bilgisayar.">${p.scope==="any"?"içeriden + dışarıdan (tüm ağ kartları)":p.scope==="loopback"?"yalnız içeriden":"yalnız bu ağ kartı üzerinden"}</span>`},
     {k:"name",l:"İşlem",f:p=>`<b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> ${p.sig==="NotSigned"?sigTag("NotSigned"):""}`},
-    {k:"reach",l:"Dışarıdan erişim",s:p=>({open:0,limited:1,blocked:2,local:3}[p.reach]),f:reachTag,t:p=>(p.fw_rules||[]).join(" | ")},
+    {k:"reach",l:"Dışarıdan erişim",s:p=>({open:0,lan:1,limited:2,blocked:3,local:4}[p.reach]),f:reachTag,t:p=>(p.fw_rules||[]).join(" | ")},
     {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
     {k:"why",l:"Neden önemli",f:p=>(p.trusted?'<span class="tag ok" title="Güvenilir olarak işaretlendi: rozete ve karta sayılmaz">Güvenilir</span> ':"")+(p.reach==="open"||p.reach==="limited"?`<span class="muted">${esc(p.why)}</span>`:'<span class="dim">–</span>'),t:p=>p.why},
     {k:"_a",l:"",f:p=>p.reach==="open"?portAction(p):""},
   ], rows, {sort:"risk", click:p=>p.pid&&openProc(p.pid),
-    empty: reach==="open_limited"||reach==="open" ? "✓ Dışarıdan erişilebilir port yok. Güvenlik duvarının engellediği portları görmek için üstteki filtreyi değiştirin." : "Kayıt yok"});
+    empty: reach==="open_limited"||reach==="open"||reach==="lan" ? "✓ Dışarıdan erişilebilir port yok. Güvenlik duvarının engellediği portları görmek için üstteki filtreyi değiştirin." : "Kayıt yok"});
   $("#portcount").textContent=`${n} / ${PORTS.length} dinleyen soket`;
   const cnt=r=>PORTS.filter(p=>p.reach===r).length, open=PORTS.filter(p=>p.reach==="open");
   const k=[["Dinleyen port (toplam)",PORTS.length,"","","Tümünü göster"],
-    ["Dışarıdan erişilebilir",open.length,open.length?"warn":"ok","open","Güvenlik duvarının izin verdiği portlar"],
-    ["Bunların riskli olanı",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Dışarıdan erişilebilen portlardan, bilinen saldırı geçmişi olan servisler (RDP, SMB, Telnet, VNC, DNS…). Güvenilir işaretlediğiniz portlar sayılmaz."],
+    ["Her adresten erişilebilir",open.length,open.length?"warn":"ok","open","Güvenlik duvarının her adresten (internet dahil) izin verdiği portlar"],
+    ["Bunların riskli olanı",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Her adresten erişilebilen portlardan, bilinen saldırı geçmişi olan servisler (RDP, SMB, Telnet, VNC, DNS…). Güvenilir işaretlediğiniz portlar sayılmaz."],
+    ["Yalnız yerel ağdan",cnt("lan"),"","lan","İzin kuralı yalnızca yerel ağ adreslerine (ev/ofis ağı) izin veriyor"],
     ["Kısıtlı erişim",cnt("limited"),"ok","limited","Yalnızca belirli adreslerden erişilebilir (ör. Tailscale)"],
     ["Güvenlik duvarı engelliyor",cnt("blocked"),"ok","blocked","Program dinliyor ama dışarıdan erişilemez: zararsız"],
     ["Yalnız bu bilgisayar",cnt("local"),"","local","Yalnızca 127.0.0.1 üzerinde dinleyenler"]];
@@ -1000,8 +1004,8 @@ async function showTrustedPorts(){
   await uiAsk({title:"Güvenilir portlar",text:"Bu portlar rozete ve \"Dikkat gerektirenler\" kartına sayılmaz.",html:'<div id="tplist" style="margin-top:12px;max-height:300px;overflow:auto"></div>',ok:"Kapat",nocancel:true,
     mount:ov=>{ render(ov); ov.addEventListener("click",async e=>{ const b=e.target.closest("[data-tpdel]"); if(!b) return; await post("/api/trustports/remove",{key:b.dataset.tpdel}); render(ov); refreshPage(true); }); }}); }
 $("#portattn").addEventListener("click",e=>{ const t=e.target.closest("[data-ptrust]"); if(t){ trustPort(t.dataset.ptrust); return; } if(e.target.closest("[data-ptmanage]")){ showTrustedPorts(); return; } const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portreach").value="open"; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
-$("#portkpis").addEventListener("click",e=>{ const c=e.target.closest("[data-reach]"); if(c){ $("#portreach").value=c.dataset.reach; $("#portq").value=""; renderPorts(); } });
-["#portq","#portreach","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
+$("#portkpis").addEventListener("click",e=>{ const c=e.target.closest("[data-reach]"); if(c){ $("#portreach").value=c.dataset.reach; $("#portbind").value=""; $("#portq").value=""; renderPorts(); } });
+["#portq","#portreach","#portbind","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
 
 /* ================= CANLI AKIŞ ================= */
 const EVK = {alert:["Uyarı","bad"],listen:["Port açıldı","warn"],unlisten:["Port kapandı",""],conn_out:["Giden bağ.","info"],conn_in:["Gelen bağ.","vio"],proc_start:["İşlem başladı","ok"],proc_end:["İşlem bitti",""],action:["Kullanıcı eylemi","info"],fwchange:["Güvenlik duvarı","warn"]};

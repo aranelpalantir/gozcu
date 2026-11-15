@@ -1917,6 +1917,53 @@ def _port_match(spec, port):
     return False
 
 
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")     # Tailscale / CGNAT
+_TS6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")  # Tailscale IPv6
+_TRUSTED_NETS = [_CGNAT, _TS6]
+_PRIV_NETS = [ipaddress.ip_network(x) for x in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8",
+                                                 "224.0.0.0/4", "fc00::/7", "fe80::/10", "ff00::/8", "::1/128")]
+
+
+def _inside(lo, hi, nets):
+    return any(lo.version == n.version and lo in n and hi in n for n in nets)
+_LAN_WORDS = {"localsubnet", "localsubnet6", "intranet", "defaultgateway", "dhcp", "dns", "wins"}
+_SCOPE_RANK = {"limited": 1, "lan": 2, "internet": 3}
+
+
+def _raddr_scope(raddr):
+    """Kuralin uzak adres kapsami: internet (herkes) > lan (yerel ag adresleri) > limited (belirli adresler, ör. Tailscale)."""
+    toks = [t.strip() for t in str(raddr or "").split(",") if t.strip()]
+    if not toks:
+        return "internet"
+    best = "limited"
+    for t in toks:
+        tl = t.lower()
+        if tl in ("*", "any", "internet"):
+            sc = "internet"
+        elif tl in _LAN_WORDS:
+            sc = "lan"
+        else:
+            sc = "limited"
+            try:
+                if "-" in t and "/" not in t:
+                    x, y = t.split("-", 1)
+                    lo, hi = ipaddress.ip_address(x.strip()), ipaddress.ip_address(y.strip())
+                else:
+                    net = ipaddress.ip_network(t, strict=False)
+                    lo, hi = net.network_address, net.broadcast_address
+                if _inside(lo, hi, _TRUSTED_NETS):
+                    sc = "limited"            # Tailscale (IPv4 CGNAT / IPv6 ULA): belirli, guvenilir esler
+                elif _inside(lo, hi, _PRIV_NETS):
+                    sc = "lan"                # yalnizca ozel/yerel ag adresleri
+                elif int(hi) - int(lo) > 2 ** 24:   # cok genis aralik = pratikte internet (0.0.0.0/0 gibi)
+                    sc = "internet"
+            except ValueError:
+                pass
+        if _SCOPE_RANK[sc] > _SCOPE_RANK[best]:
+            best = sc
+    return best
+
+
 _FWV = {"fw": None, "n": -1, "allow": [], "block": [], "memo": {}}
 
 
@@ -1949,11 +1996,14 @@ def fw_classify(fw, proto, port, exe):
     if blk:
         res = ("blocked", blk[:3])
     elif ar:
-        # tum izin kurallari belirli uzak adreslerle sinirliysa (ornegin Tailscale) port internete acik degildir
-        if all(r["raddr"] not in ("*", "") for r in ar):
-            res = ("restricted", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]])
-        else:
+        # en genis kuralin kapsami belirler: internet (herkes) > yerel ag > belirli adresler (ör. Tailscale)
+        top = max((_raddr_scope(r["raddr"]) for r in ar), key=_SCOPE_RANK.get)
+        if top == "internet":
             res = ("allowed", [r["name"] for r in ar[:3]])
+        elif top == "lan":
+            res = ("lan", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]])
+        else:
+            res = ("restricted", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]])
     else:
         res = ("default", [])
     _FWV["memo"][mk] = res
@@ -1997,7 +2047,7 @@ def compute_ports(fw):
         # reach: portun DISARIDAN gercekten erisilebilir olup olmadigi (dinlemek tek basina risk degildir)
         #   open = herkes (izin kurali var / kurallar okunamadi), limited = belirli adreslerle sinirli,
         #   blocked = guvenlik duvari gelen baglantiyi reddediyor, local = yalniz bu bilgisayar
-        reach = "local" if not exposed else {"allowed": "open", "unknown": "open", "restricted": "limited",
+        reach = "local" if not exposed else {"allowed": "open", "unknown": "open", "lan": "lan", "restricted": "limited",
                                              "blocked": "blocked", "default": "blocked"}[fws]
         risk = "none"
         if exposed:
@@ -2006,6 +2056,8 @@ def compute_ports(fw):
                 risk = "none"
             elif reach == "limited":
                 risk = "low" if risk in ("high", "medium") else risk
+            elif reach == "lan":
+                risk = {"high": "medium", "medium": "low"}.get(risk, risk)
         s = sig_of(c["exe"])
         rows.append({**c, "svc_name": info[0] if info else "", "risk": risk, "why": info[2] if info else "",
                      "scope": scope, "exposed": exposed, "fw": fws, "reach": reach, "fw_rules": fwr,

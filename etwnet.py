@@ -22,8 +22,11 @@ from ctypes import (POINTER, Structure, byref, c_byte, c_int64, c_long, c_uint64
                     c_ushort, c_void_p, c_wchar, c_wchar_p, sizeof)
 
 import psutil
+import re
+import subprocess
 
-SESSION = "SysDashNet"
+SESSION_PREFIX = "GozcuNet-"      # her Gozcu ornegi kendi oturumunu kullanir (birbirini kapatmasin)
+LEGACY_SESSION = "SysDashNet"     # eski surumun ortak oturum adi
 PROVIDER = uuid.UUID("7DD42A49-5329-4832-8DFD-43D979153A88")  # Microsoft-Windows-Kernel-Network
 
 # olay kimlikleri: id -> (protokol, yon, ipv6)
@@ -144,9 +147,27 @@ def _new_props():
     return b
 
 
-def _stop_session():
+def _stop_session(name):
     b = _new_props()
-    return _adv.ControlTraceW(0, SESSION, byref(b), 1)  # EVENT_TRACE_CONTROL_STOP
+    return _adv.ControlTraceW(0, name, byref(b), 1)  # EVENT_TRACE_CONTROL_STOP
+
+
+def cleanup_stale():
+    """Cokmus/kapanmis Gozcu orneklerinden kalan ETW oturumlarini kapatir (oturum sayisi sinirli: 64)."""
+    try:
+        out = subprocess.run(["logman", "query", "-ets"], capture_output=True, timeout=20,
+                             creationflags=0x08000000).stdout.decode("oem", "replace")
+    except Exception:
+        return
+    me = os.getpid()
+    for line in out.splitlines():
+        parts = line.split()
+        name = parts[0] if parts else ""
+        m = re.fullmatch(re.escape(SESSION_PREFIX) + r"(\d+)", name)
+        if m and int(m.group(1)) != me and not psutil.pid_exists(int(m.group(1))):
+            _stop_session(name)
+        elif name == LEGACY_SESSION:     # eski surumun ortak oturumu: sahipsiz kalir, yeni surumde kullanilmaz
+            _stop_session(name)
 
 
 class NetTrace:
@@ -171,60 +192,91 @@ class NetTrace:
         self._cb = CALLBACK(self._on_event)
         self._handle = None
         self._trace = None
+        self.session = f"{SESSION_PREFIX}{os.getpid()}"
+        self._stopping = False
+        self.restarts = 0
 
     # ------------------------------------------------------------------ baslat
     def start(self):
         if self._trace is not None:
             return
         self._refresh_locals()
-        _stop_session()  # onceki calismadan kalan oturum varsa kapat
+        cleanup_stale()
+        if not self._open():
+            return
+        atexit.register(self.stop)
+        threading.Thread(target=self._consume, daemon=True).start()
+        threading.Thread(target=self._rates, daemon=True).start()
+
+    def _open(self):
+        """ETW oturumunu acar, saglayicilari etkinlestirir, izi acar. -> basari"""
+        _stop_session(self.session)   # ayni ornege ait artik oturum varsa kapat (baska orneklere dokunma)
         b = _new_props()
         h = c_uint64(0)
-        err = _adv.StartTraceW(byref(h), SESSION, byref(b))
+        err = _adv.StartTraceW(byref(h), self.session, byref(b))
         if err == 5:
             self.status = "erişim reddedildi (yönetici olarak çalıştırın)"
-            return
+            return False
         if err != 0:
             self.status = f"oturum başlatılamadı (hata {err})"
-            return
+            return False
         self._handle = h
         g = GUID.from_buffer_copy(PROVIDER.bytes_le)
         err = _adv.EnableTraceEx2(h.value, byref(g), 1, 5, 0xFFFFFFFFFFFFFFFF, 0, 0, None)
         if err != 0:
             self.status = ("erişim reddedildi (yönetici olarak çalıştırın)" if err == 5
                            else f"sağlayıcı açılamadı (hata {err})")
-            _stop_session()
-            return
+            _stop_session(self.session)
+            return False
         # DNS sorgulari (basarisiz olursa sadece DNS sekmesi bos kalir)
         g2 = GUID.from_buffer_copy(DNS_PROVIDER.bytes_le)
         self.dns_status = "ok" if _adv.EnableTraceEx2(h.value, byref(g2), 1, 5, 0xFFFFFFFFFFFFFFFF, 0, 0, None) == 0 \
             else "DNS sağlayıcısı açılamadı"
         lf = LOGFILE()
-        lf.LoggerName = SESSION
+        lf.LoggerName = self.session
         lf.ProcessTraceMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD
         lf.EventRecordCallback = self._cb
         self._lf = lf
         th = _adv.OpenTraceW(byref(lf))
         if th == INVALID_HANDLE:
             self.status = f"iz açılamadı (hata {ctypes.get_last_error()})"
-            _stop_session()
-            return
+            _stop_session(self.session)
+            return False
         self._trace = c_uint64(th)
-        atexit.register(self.stop)
-        threading.Thread(target=self._consume, daemon=True).start()
-        threading.Thread(target=self._rates, daemon=True).start()
         self.status = "ok"
+        return True
 
     def stop(self):
+        self._stopping = True
         try:
-            _stop_session()
+            _stop_session(self.session)
         except Exception:
             pass
 
     def _consume(self):
-        err = _adv.ProcessTrace(byref(self._trace), 1, None, None)
-        if self.status == "ok":
-            self.status = f"izleme durdu (kod {err})"
+        """Olaylari isler. Oturum disaridan kapatilirsa (ornegin baska bir program) kendiliginden yeniden kurar."""
+        fails = 0
+        while not self._stopping:
+            if self._trace is None:
+                time.sleep(min(2 * (fails + 1), 20))
+                if self._stopping:
+                    break
+                if self._open():
+                    fails = 0
+                    self.restarts += 1
+                else:
+                    fails += 1
+                continue
+            err = _adv.ProcessTrace(byref(self._trace), 1, None, None)
+            if self._stopping:
+                break
+            try:
+                _adv.CloseTrace(self._trace.value)
+            except Exception:
+                pass
+            self._trace = None
+            _stop_session(self.session)
+            self.status = f"izleme durdu (kod {err}); yeniden başlatılıyor"
 
     # ------------------------------------------------------------------ olaylar
     def _refresh_locals(self):

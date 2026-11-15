@@ -195,7 +195,7 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
 #flowmap .ed{fill:none;stroke:var(--accent);opacity:.32;transition:opacity .12s}
 #flowmap .ed.hi{opacity:.95;stroke:var(--warn)}#flowmap .ed.lo{opacity:.06}
 #flowmap text{font-size:12px;fill:var(--text)}#flowmap .cnt{fill:var(--dim);font-size:11px}
-#flowmap .nd{cursor:default}#flowmap .nd circle{fill:var(--accent)}
+#flowmap .ipdim{fill:var(--dim);font-size:11px}#flowmap .nd{cursor:default}#flowmap .nd circle{fill:var(--accent)}
 /* disk haritası */
 #treemap{border-radius:8px;cursor:pointer}
 /* açık tema */
@@ -434,7 +434,7 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
     <!-- AĞ -->
     <section class="page" id="p-net">
       <div class="grid" id="nics" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))"></div>
-      <div class="card" style="margin-top:14px"><h3>Bağlantı haritası <span class="r muted">işlemler → internet adresleri · üzerine gelince izle</span></h3><div id="flowmap"></div></div>
+      <div class="card" style="margin-top:14px"><h3>Bağlantı haritası <span class="r muted">hangi program hangi adrese bağlı · bir öğenin üzerine gelince ilgili bağlantılar vurgulanır</span></h3><div id="flowmap"></div></div>
       <div class="grid two" style="margin-top:14px">
         <div class="card"><h3>En çok bağlanılan internet adresleri</h3><div class="tw short" id="topremote"></div></div>
         <div class="card"><h3>Bağlantı sayısına göre işlemler</h3><div class="list" id="byproc"></div></div>
@@ -1387,14 +1387,14 @@ function renderFlow(d){
   const L=[...pt].sort((a,b)=>b[1]-a[1]).slice(0,12), ln=new Set(L.map(x=>x[0]));
   const rt=new Map(); edges.filter(e=>ln.has(e.name)).forEach(e=>rt.set(e.ip,(rt.get(e.ip)||0)+e.n));
   const R=[...rt].sort((a,b)=>b[1]-a[1]).slice(0,16), rn=new Set(R.map(x=>x[0]));
-  const host={}; edges.forEach(e=>{ if(e.host) host[e.ip]=e.host; });
+  const host={}, org={}, cc={}; edges.forEach(e=>{ if(e.host) host[e.ip]=e.host; if(e.org) org[e.ip]=e.org; if(e.cc) cc[e.ip]=e.cc; });
   const W=1000, rowH=27, n=Math.max(L.length,R.length), H=n*rowH+16, lx=300, rx=700;
   const yOf=(arr)=>{ const off=(n-arr.length)*rowH/2; return new Map(arr.map((x,i)=>[x[0],8+off+i*rowH+rowH/2])); };
   const ly=yOf(L), ry=yOf(R), cut=(s,m)=>s.length>m?s.slice(0,m-1)+"…":s;
   const paths=edges.filter(e=>ln.has(e.name)&&rn.has(e.ip)).map(e=>{ const y1=ly.get(e.name), y2=ry.get(e.ip), mx=(lx+rx)/2;
     return `<path class="ed" data-l="${esc(e.name)}" data-r="${esc(e.ip)}" d="M${lx},${y1} C${mx},${y1} ${mx},${y2} ${rx},${y2}" stroke-width="${Math.min(6,1+e.n*.9).toFixed(1)}"/>`; }).join("");
   const lnodes=L.map(([k,c])=>`<g class="nd" data-l="${esc(k)}"><circle cx="${lx}" cy="${ly.get(k)}" r="4.5"/><text x="${lx-12}" y="${ly.get(k)+4}" text-anchor="end">${esc(cut(k,36))}</text><text class="cnt" x="${lx-12-Math.min(k.length,36)*6.6-8}" y="${ly.get(k)+4}" text-anchor="end">${c}</text></g>`).join("");
-  const rnodes=R.map(([k,c])=>`<g class="nd" data-r="${esc(k)}"><circle cx="${rx}" cy="${ry.get(k)}" r="4.5" style="fill:var(--warn)"/><text x="${rx+12}" y="${ry.get(k)+4}">${esc(cut(host[k]||k,38))}</text><title>${esc(k)}${host[k]?" — "+esc(host[k]):""} (${c} bağlantı)</title></g>`).join("");
+  const rnodes=R.map(([k,c])=>`<g class="nd" data-r="${esc(k)}"><circle cx="${rx}" cy="${ry.get(k)}" r="4.5" style="fill:var(--warn)"/><text x="${rx+12}" y="${ry.get(k)+4}">${org[k] ? `${esc(cut(org[k],24))} <tspan class="ipdim">${esc(k)}</tspan>` : esc(cut(host[k]||k,38))}</text><title>${esc(k)}${host[k]?" — "+esc(host[k]):""}${org[k]?" — "+esc(org[k]):""}${cc[k]?" ("+esc(cc[k]+" "+ccName(cc[k]))+")":""} · ${c} bağlantı</title></g>`).join("");
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="İşlem – internet adresi bağlantı haritası">${paths}${lnodes}${rnodes}</svg>`;
   const svg=el.firstChild, all=[...svg.querySelectorAll(".ed")];
   svg.onmouseover=e=>{ const g=e.target.closest(".nd"); if(!g) return; const l=g.dataset.l, r=g.dataset.r;
@@ -1409,9 +1409,13 @@ async function loadNet(force){
     <div class="row"><span class="muted">Toplam</span><span>↓ ${bytes(n.recv)} · ↑ ${bytes(n.sent)}</span></div>
     ${(n.errin+n.errout+n.dropin+n.dropout)?`<div class="row"><span class="muted">Hata / düşen</span><span class="warn">${n.errin+n.errout} / ${n.dropin+n.dropout}</span></div>`:""}</div></div>`).join("");
   table($("#topremote"),"remote",[
-    {k:"ip",l:"Adres",f:r=>`<span class="mono">${esc(r.ip)}</span>`},{k:"host",l:"Host",t:r=>r.host},{k:"n",l:"Bağ.",num:1},
-    {k:"procs",l:"İşlemler",s:r=>r.procs.join(","),f:r=>esc(r.procs.join(", "))},{k:"_a",l:"",f:r=>`<button class="sm" onclick="blockIp('${esc(r.ip)}')">Engelle</button>`}],
-    d.top_remote,{sort:"n",empty:"İnternet bağlantısı yok"});
+    {k:"ip",l:"Adres",f:r=>{ const bits=[r.host, r.cc?r.cc+" "+ccName(r.cc):"", r.org].filter(Boolean).join(" · ");
+        return `<span class="mono">${esc(r.ip)}</span>`+(bits?`<span class="sub" style="max-width:230px" title="${esc(bits)}">${esc(bits)}</span>`:""); }},
+    {k:"n",l:"Bağ.",num:1},
+    {k:"procs",l:"İşlemler",cls:"wrap",s:r=>r.procs.join(","),f:r=>esc(r.procs.join(", "))},
+    {k:"_a",l:"",f:r=>`<button class="sm" onclick="blockIp('${esc(r.ip)}')">Engelle</button>`}],
+    d.top_remote,{sort:"n",empty:"İnternet bağlantısı yok",
+      csv:[{l:"Adres",v:r=>r.ip},{l:"Alan adı",v:r=>r.host||""},{l:"Ülke",v:r=>r.cc||""},{l:"Kuruluş",v:r=>r.org||""},{l:"Bağlantı",v:r=>r.n},{l:"İşlemler",v:r=>r.procs.join(", ")}]});
   renderFlow(d);
   const mx=Math.max(1,...d.by_proc.map(x=>x[1]));
   $("#byproc").innerHTML = d.by_proc.map(([n,c])=>`<div class="li"><div><div class="n">${esc(n)}</div><div class="bar" style="margin-top:3px"><i style="width:${c/mx*100}%"></i></div></div><div class="mono">${c}</div></div>`).join("")||'<div class="muted">–</div>';

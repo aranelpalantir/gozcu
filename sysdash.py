@@ -2413,9 +2413,17 @@ def api_network(q):
             remote[c["rip"]] += 1
             rproc.setdefault(c["rip"], set()).add(c["name"])
             pairs[(c["rip"], c["name"])] += 1
-    top_remote = [{"ip": ip, "n": n, "host": RDNS.get(ip) or "", "procs": sorted(rproc[ip])} for ip, n in remote.most_common(25)]
+    def _ipinfo(ip):
+        g = (GEO.lookup(ip) if GEO and ip_class(ip) == "public" else None) or {}
+        host = (NETTRACE.host_of(ip) if NETTRACE else None) or RDNS.get(ip) or ""
+        return host, g.get("cc", ""), g.get("org", "")
+    top_remote = [{"ip": ip, "n": n, "host": _ipinfo(ip)[0], "cc": _ipinfo(ip)[1], "org": _ipinfo(ip)[2], "procs": sorted(rproc[ip])}
+                  for ip, n in remote.most_common(25)]
     byproc = Counter(c["name"] for c in conns if c["dir"] in ("in", "out"))
-    edges = [{"ip": ip, "name": n, "n": v, "host": RDNS.get(ip) or ""} for (ip, n), v in pairs.most_common(400)]
+    def _edge(ip, n, v):
+        host, cc, org = _ipinfo(ip)
+        return {"ip": ip, "name": n, "n": v, "host": host, "cc": cc, "org": org}
+    edges = [_edge(ip, n, v) for (ip, n), v in pairs.most_common(400)]
     return {"nics": nics, "neighbors": nb, "dns": dn, "profiles": netp, "err": e1 or e2,
             "top_remote": top_remote, "by_proc": byproc.most_common(20), "edges": edges}
 

@@ -1737,12 +1737,30 @@ def sha256_file(path, limit=512 * 1024 * 1024):
         return f"(okunamadı: {e.strerror})"
 
 
+def ended_info(pid):
+    """Artik calismayan islem: olay kayitlarindan bilinen ad/yolu dondurur."""
+    name = exe = ""
+    for e in reversed(MON.events):
+        if e.get("pid") == pid and e.get("name"):
+            name = name or e["name"]
+            exe = exe or e.get("exe", "")
+            if name and exe:
+                break
+    return {"ended": True, "pid": pid, "name": name or "?", "exe": exe}
+
+
 def api_process(q):
     pid = int(q.get("pid", ["0"])[0])
+    t = float(q["t"][0]) if "t" in q else None
     try:
         p = psutil.Process(pid)
     except psutil.NoSuchProcess:
-        return {"error": "İşlem bulunamadı"}
+        return ended_info(pid)
+    try:
+        if t and p.create_time() > t + 2:   # PID baska bir islem tarafindan yeniden kullanilmis
+            return ended_info(pid)
+    except psutil.Error:
+        pass
     snap = MON.snapshot["procs"].get(pid, {})
     d = {"pid": pid, **snap}
 

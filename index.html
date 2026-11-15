@@ -789,9 +789,36 @@ function procTree(all){
 }
 ["#procq","#procnet","#procsus","#procuser","#proctreechk"].forEach(s=>$(s).addEventListener("input",renderProcs));
 
+function fillTimeline(pid, evT){
+api("/api/timeline?pid="+pid+(evT?"&t="+evT:"")).then(r=>{ const el=$("#ptl"); if(!el) return;
+    $("#ptlrange").textContent = evT ? `(olay saati ±15 dk · ${tm(evT)})` : "(son 30 dk)";
+    const lab={dns:"DNS",net_out:"↗ Giden",net_in:"↙ Gelen"};
+    el.innerHTML = r.items&&r.items.length ? r.items.map(x=>{ const [l,c]=EVK[x.k]||[lab[x.k]||x.k,""];
+      const hit = evT && Math.abs(x.t-evT)<=1.5;
+      return `<div class="ev ${x.lvl}" ${hit?'style="outline:1px solid var(--warn,#e3b341)"':""}><span class="dim">${tm(x.t)}</span><span class="k"><span class="tag ${x.lvl==="high"?"bad":c}">${l}</span></span><span>${esc(x.msg)}</span></div>`; }).join("")
+      : '<div class="muted">Bu aralıkta kayıt yok (yönetici modunda ağ ve DNS kayıtları da gelir).</div>'; }).catch(()=>{ const el=$("#ptl"); if(el) el.innerHTML='<div class="muted">Zaman çizelgesi alınamadı.</div>'; });
+}
+function fillNetGraph(pid){
+api("/api/etwproc?pid="+pid).then(h=>{ const cv=$("#pnetch"); if(!cv) return;
+    if(h.status!=="ok"||!h.tx.length){ cv.style.display="none"; $("#pnetleg").textContent=h.status!=="ok"?"(izleme kapalı: "+h.status+")":"(bu işlem henüz ağ trafiği üretmedi)"; return; }
+    $("#pnetleg").innerHTML='<span style="color:#3fb950">● gelen</span> <span style="color:#e3b341">● giden</span>';
+    line(cv,[{d:h.rx,c:"#3fb950"},{d:h.tx,c:"#e3b341"}],{axis:true,fmt:v=>rate(v),n:150}); }).catch(()=>{});
+}
+function renderEnded(d, pid, evT){
+  const nm = d.name && d.name!=="?" ? d.name : "Bilinmeyen işlem";
+  $("#dtitle").innerHTML = `${esc(nm)} <span class="muted mono" style="font-size:13px">PID ${pid}</span>`;
+  $("#dbody").innerHTML = `<div class="banner info" style="margin-bottom:14px">Bu işlem artık çalışmıyor (sonlanmış). Canlı ayrıntılar (komut satırı, imza, açık dosyalar) alınamaz; aşağıda Gözcü'nün o işlem için kaydettiği olaylar var.</div>
+    <dl class="kv"><dt>Ad</dt><dd>${esc(nm)}</dd><dt>Yol</dt><dd><span class="mono">${esc(d.exe||"(kayıtta yok)")}</span></dd></dl>
+    <div class="sect">Ağ hızı (son 5 dk) <span class="muted" id="pnetleg" style="font-weight:400"></span></div><canvas class="chart" id="pnetch" style="height:110px;width:100%"></canvas>
+    <div class="sect">Zaman çizelgesi <span class="muted" id="ptlrange" style="font-weight:400"></span></div><div id="ptl" style="max-height:340px;overflow:auto"><div class="prog"><i></i></div></div>
+    ${d.exe?`<div class="acts"><button id="preveal">Klasörde göster</button><button id="pblock">İnternet erişimini engelle</button></div>`:""}`;
+  fillTimeline(pid, evT); fillNetGraph(pid);
+  if(d.exe){ $("#preveal").onclick=()=>post("/api/reveal",{path:d.exe}); $("#pblock").onclick=()=>blockProg(d.exe,nm); }
+}
 async function openProc(pid, evT){
   $("#drawer").classList.add("on"); $("#dtitle").textContent="PID "+pid; $("#dbody").innerHTML='<div class="prog"><i></i></div>';
-  const d = await api("/api/process?pid="+pid);
+  const d = await api("/api/process?pid="+pid+(evT?"&t="+evT:""));
+  if(d.ended){ renderEnded(d,pid,evT); return; }
   if(d.error){ $("#dbody").innerHTML=`<div class="empty">${esc(d.error)}</div>`; return; }
   $("#dtitle").innerHTML = `${esc(d.name)} <span class="muted mono" style="font-size:13px">PID ${pid}</span>`;
   const sig = d.sig ? `${sigTag(d.sig.s)} ${esc(d.sig.n||"")}` : '<span class="dim">–</span>';
@@ -824,17 +851,8 @@ async function openProc(pid, evT){
       ${d.exe?`<button id="preveal">Klasörde göster</button><button id="pblock">İnternet erişimini engelle</button>`:""}
       ${vt}
     </div>`;
-  api("/api/timeline?pid="+pid+(evT?"&t="+evT:"")).then(r=>{ const el=$("#ptl"); if(!el) return;
-    $("#ptlrange").textContent = evT ? `(olay saati ±15 dk · ${tm(evT)})` : "(son 30 dk)";
-    const lab={dns:"DNS",net_out:"↗ Giden",net_in:"↙ Gelen"};
-    el.innerHTML = r.items&&r.items.length ? r.items.map(x=>{ const [l,c]=EVK[x.k]||[lab[x.k]||x.k,""];
-      const hit = evT && Math.abs(x.t-evT)<=1.5;
-      return `<div class="ev ${x.lvl}" ${hit?'style="outline:1px solid var(--warn,#e3b341)"':""}><span class="dim">${tm(x.t)}</span><span class="k"><span class="tag ${x.lvl==="high"?"bad":c}">${l}</span></span><span>${esc(x.msg)}</span></div>`; }).join("")
-      : '<div class="muted">Bu aralıkta kayıt yok (yönetici modunda ağ ve DNS kayıtları da gelir).</div>'; }).catch(()=>{ const el=$("#ptl"); if(el) el.innerHTML='<div class="muted">Zaman çizelgesi alınamadı.</div>'; });
-  api("/api/etwproc?pid="+pid).then(h=>{ const cv=$("#pnetch"); if(!cv) return;
-    if(h.status!=="ok"||!h.tx.length){ cv.style.display="none"; $("#pnetleg").textContent=h.status!=="ok"?"(izleme kapalı: "+h.status+")":"(bu işlem henüz ağ trafiği üretmedi)"; return; }
-    $("#pnetleg").innerHTML='<span style="color:#3fb950">● gelen</span> <span style="color:#e3b341">● giden</span>';
-    line(cv,[{d:h.rx,c:"#3fb950"},{d:h.tx,c:"#e3b341"}],{axis:true,fmt:v=>rate(v),n:150}); }).catch(()=>{});
+  fillTimeline(pid, evT);
+  fillNetGraph(pid);
   $("#pkill").onclick = async()=>{ if(!await uiConfirm(`${d.name} (PID ${pid}) sonlandırılsın mı? Kaydedilmemiş veriler kaybolabilir.`)) return;
     const r=await post("/api/kill",{pid}); r.ok?(toast("İşlem sonlandırıldı"),closeDrawer()):toast(r.error,1); };
   $("#psusp").onclick = async()=>{ const resume=d.status==="stopped"; const r=await post("/api/suspend",{pid,resume});

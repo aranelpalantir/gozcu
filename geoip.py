@@ -48,14 +48,17 @@ class _Table:
         return None
 
 
-def _latest(pattern):
-    files = sorted(glob.glob(pattern))
+def _latest(folders, name_pattern):
+    """Birden fazla klasorde arar; dosya adindaki tarihe (YYYY-MM) gore en yenisini dondurur."""
+    files = [f for d in folders for f in glob.glob(os.path.join(d, name_pattern))]
+    files.sort(key=lambda f: os.path.basename(f))
     return files[-1] if files else None
 
 
 class GeoIP:
     def __init__(self, folder):
-        self.folder = folder
+        self.folders = [folder] if isinstance(folder, str) else list(folder)
+        self.folder = self.folders[0]
         self.ready = False
         self.status = "yüklenmedi"
         self.cc = {}        # ulke kodu <-> sayi
@@ -73,8 +76,8 @@ class GeoIP:
 
     def _load(self):
         try:
-            cf = _latest(os.path.join(self.folder, "dbip-country-lite-*.csv.gz"))
-            af = _latest(os.path.join(self.folder, "dbip-asn-lite-*.csv.gz"))
+            cf = _latest(self.folders, "dbip-country-lite-*.csv.gz")
+            af = _latest(self.folders, "dbip-asn-lite-*.csv.gz")
             if not cf and not af:
                 self.status = "veritabanı dosyası yok (geodata klasörü)"
                 return

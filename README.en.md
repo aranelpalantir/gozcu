@@ -35,6 +35,14 @@ Country/ASN lookups use an offline database, so lookups never leave your machine
 - Open `http://127.0.0.1:8799` (the next free port is used if 8799 is busy; override with the `SYSDASH_PORT` environment variable).
 - Optional: put the free [DB-IP Lite](https://db-ip.com/db/lite.php) country/ASN files in `geodata/` (see [geodata/README.md](geodata/README.md)); without them everything works except the country/organization columns.
 
+## Prebuilt .exe (no Python needed)
+
+Download `Gozcu.exe` from [Releases](https://github.com/aranelpalantir/gozcu/releases) and double-click it; the dashboard opens in your browser (no console window).
+
+- **Admin mode:** ETW network monitoring, firewall tools and start-at-boot need administrator rights — right-click → *Run as administrator*, or use the in-app *restart as administrator* button.
+- **Your data** (settings, backups, history) lives in `%LOCALAPPDATA%\Gozcu`. Put the optional `geodata` folder there or next to `Gozcu.exe`.
+- **SmartScreen / antivirus:** the exe is **not code-signed**, so Windows SmartScreen may warn (*More info → Run anyway*) and some antivirus products may flag PyInstaller-packed tools that touch the firewall/network. Compare against `Gozcu.exe.sha256`, or inspect the code and build it yourself with `build.ps1` (64-bit Python; output `dist\Gozcu.exe`). Release files are built from this repository by GitHub Actions.
+
 ## Privacy & local files
 
 Local data files (`telegram.json` — Telegram token encrypted with Windows DPAPI, `nettraffic.json`, `baseline.json`, `fw_snapshot.json`, `backups/`) stay on your machine

@@ -35,7 +35,21 @@ except ImportError:
     print("psutil gerekli. Kurmak için:  python -m pip install psutil")
     sys.exit(1)
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+FROZEN = bool(getattr(sys, "frozen", False))          # PyInstaller ile paketlenmiş .exe mi?
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+RES_DIR = getattr(sys, "_MEIPASS", SCRIPT_DIR)        # index.html, ikon (pakete gömülü, salt okunur)
+if FROZEN:   # veri dosyaları (ayarlar, yedekler, geçmiş) kalıcı ve yazılabilir bir klasörde durur
+    APP_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Gozcu")
+    os.makedirs(APP_DIR, exist_ok=True)
+else:
+    APP_DIR = SCRIPT_DIR
+
+
+def self_command(extra=""):
+    """Gözcü'yü yeniden başlatmak için (yürütülebilir, argümanlar, çalışma klasörü)."""
+    if FROZEN:
+        return sys.executable, extra.strip(), APP_DIR
+    return sys.executable, f'"{os.path.abspath(__file__)}" {extra}'.strip(), APP_DIR
 PORT = int(os.environ.get("SYSDASH_PORT", "8799"))
 INTERVAL = 2.0
 TOKEN = secrets.token_hex(16)
@@ -238,7 +252,8 @@ def own_powershell(name, cmd, ppid):
     if not txt.startswith("[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;"):
         return False
     try:
-        return "sysdash.py" in " ".join(psutil.Process(ppid).cmdline()).lower()
+        par = psutil.Process(ppid)
+        return "sysdash.py" in " ".join(par.cmdline()).lower() or (FROZEN and par.name().lower() == "gozcu.exe")
     except Exception:
         return False
 
@@ -263,9 +278,11 @@ def cmd_scan(pid, created, name, cmd, ppid, snap):
     if len(MON.cmd_flags) > 3000:
         MON.cmd_flags.clear()
         MON.cmd_flags[(pid, created)] = reasons
+    parname = par[1] if par else ""
     for lvl, desc in reasons:
         MON.add_alert(("cmd", desc, (cmd or name)[:100]), lvl,
-                      f'{desc}: {name} (PID {pid})' + (f' — {cmd[:150]}' if cmd else ""), pid=pid, name=name)
+                      f'{desc}: {name} (PID {pid}, üst işlem: {parname or "bilinmiyor"})' + (f' — {cmd[:150]}' if cmd else ""),
+                      pid=pid, name=name, parent=parname)
 
 
 def fmt_bytes(n):
@@ -603,7 +620,7 @@ class Monitor(threading.Thread):
 
     def add_alert(self, key, level, msg, **data):
         cat = self._cat(key)
-        if cat and is_suppressed(cat, data.get("name")):
+        if cat and is_suppressed(cat, data.get("name"), data.get("parent", "")):
             return
         if key in self.alert_keys:
             return
@@ -614,7 +631,7 @@ class Monitor(threading.Thread):
     def add_alert_cool(self, key, cooldown, level, msg, **data):
         """Tekrarlayabilen uyarı: aynı anahtar için `cooldown` saniye içinde bir kez."""
         cat = self._cat(key)
-        if cat and is_suppressed(cat, data.get("name")):
+        if cat and is_suppressed(cat, data.get("name"), data.get("parent", "")):
             return
         now = time.time()
         if now - self.alert_cool.get(key, 0) < cooldown:
@@ -1034,12 +1051,15 @@ ALERT_LOG = os.path.join(APP_DIR, "alerts.jsonl")
 _alog_lock = threading.Lock()
 
 
-def _sup_key(cat, name):
-    return f"{cat}|{(name or '').lower()}"
+def _sup_key(cat, name, parent=""):
+    return f"{cat}|{(name or '').lower()}" + (f"|{parent.lower()}" if parent else "")
 
 
-def is_suppressed(cat, name):
-    return bool(name) and _sup_key(cat, name) in SUPPRESS
+def is_suppressed(cat, name, parent=""):
+    """Kural 'cat|ad' tum uyarilari, 'cat|ad|ust' yalnizca o ust islem tarafindan baslatilanlari susturur."""
+    if not name:
+        return False
+    return _sup_key(cat, name) in SUPPRESS or (bool(parent) and _sup_key(cat, name, parent) in SUPPRESS)
 
 
 def _sup_save():
@@ -1054,14 +1074,14 @@ def _sup_load():
     try:
         with open(SUP_FILE, "r", encoding="utf-8") as f:
             for r in json.load(f):
-                SUPPRESS[_sup_key(r["cat"], r["name"])] = r
+                SUPPRESS[_sup_key(r["cat"], r["name"], r.get("parent", ""))] = r
     except (OSError, ValueError, KeyError):
         pass
 
 
 def persist_alert(ev):
     try:
-        row = {k: ev.get(k) for k in ("t", "level", "msg", "name", "cat", "pid")}
+        row = {k: ev.get(k) for k in ("t", "level", "msg", "name", "cat", "pid", "parent")}
         with _alog_lock, open(ALERT_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except OSError:
@@ -1099,7 +1119,10 @@ except Exception:  # noqa
 
 try:
     from geoip import GeoIP
-    GEO = GeoIP(os.path.join(APP_DIR, "geodata"))
+    _geo_dirs = [os.path.join(APP_DIR, "geodata")]
+    if FROZEN:   # .exe: veritabanı exe'nin yanındaki geodata klasöründe de aranır
+        _geo_dirs.append(os.path.join(os.path.dirname(sys.executable), "geodata"))
+    GEO = GeoIP(_geo_dirs)
 except Exception:  # noqa
     traceback.print_exc()
     GEO = None
@@ -2026,9 +2049,9 @@ def post_autostart(b):
             return {"ok": False, "error": clean_ps_err(err) or "Görev silinemedi"}
         MON.add_event("action", "info", "Açılışta otomatik başlatma kapatıldı")
         return {"ok": True, "on": False}
-    exe = sys.executable
+    exe, args, wdir = self_command("--no-browser")
     pw = os.path.join(os.path.dirname(exe), "pythonw.exe")
-    if os.path.isfile(pw):
+    if not FROZEN and os.path.isfile(pw):
         exe = pw
     code, out, err = run_ps(
         "$u = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name;"
@@ -2039,8 +2062,8 @@ def post_autostart(b):
         " -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable;"
         " Register-ScheduledTask -TaskName $env:GOZCU_T -Action $a -Trigger $t -Principal $p -Settings $s"
         " -Description 'Gözcü: ağ ve sistem izleme paneli' -Force | Out-Null",
-        timeout=60, env_extra={"GOZCU_T": TASK_NAME, "GOZCU_EXE": exe, "GOZCU_DIR": APP_DIR,
-                               "GOZCU_ARGS": f'"{os.path.abspath(__file__)}" --no-browser'})
+        timeout=60, env_extra={"GOZCU_T": TASK_NAME, "GOZCU_EXE": exe, "GOZCU_DIR": wdir,
+                               "GOZCU_ARGS": args})
     if code != 0:
         return {"ok": False, "error": clean_ps_err(err) or "Görev oluşturulamadı"}
     MON.add_event("action", "info", "Açılışta otomatik başlatma açıldı (oturum açılınca, yönetici yetkisiyle)")
@@ -2080,23 +2103,28 @@ def api_suppress(q):
 
 def post_suppress_add(b):
     cat, name = str(b.get("cat", "")).strip(), str(b.get("name", "")).strip()
+    parent = str(b.get("parent", "")).strip()
     if not cat or not name:
         return {"ok": False, "error": "Bu uyarı türü susturulamaz (işlem adı yok)"}
-    SUPPRESS[_sup_key(cat, name)] = {"cat": cat, "name": name, "t": time.time(), "example": str(b.get("example", ""))[:200]}
+    key = _sup_key(cat, name, parent)
+    SUPPRESS[key] = {"cat": cat, "name": name, "parent": parent, "key": key, "t": time.time(),
+                     "example": str(b.get("example", ""))[:200]}
     _sup_save()
-    low = name.lower()
-    MON.alerts = deque((a for a in MON.alerts if not (a.get("cat") == cat and (a.get("name") or "").lower() == low)), maxlen=500)
-    MON.add_event("action", "info", f"Uyarı susturuldu: {name} · {cat}")
+    low, plow = name.lower(), parent.lower()
+    MON.alerts = deque((a for a in MON.alerts
+                        if not (a.get("cat") == cat and (a.get("name") or "").lower() == low
+                                and (not plow or (a.get("parent") or "").lower() == plow))), maxlen=500)
+    MON.add_event("action", "info", f"Uyarı susturuldu: {name} · {cat}" + (f" (üst işlem: {parent})" if parent else ""))
     return {"ok": True}
 
 
 def post_suppress_remove(b):
-    key = str(b.get("key", ""))
-    cat, _, name = key.partition("|")
-    if SUPPRESS.pop(_sup_key(cat, name), None) is None:
+    key = str(b.get("key", "")).lower()
+    r = SUPPRESS.pop(key, None)
+    if r is None:
         return {"ok": False, "error": "Kayıt bulunamadı"}
     _sup_save()
-    MON.add_event("action", "info", f"Uyarı susturması kaldırıldı: {name} · {cat}")
+    MON.add_event("action", "info", f"Uyarı susturması kaldırıldı: {r['name']} · {r['cat']}")
     return {"ok": True}
 
 
@@ -3046,8 +3074,8 @@ def post_scan_cancel(b):
 def post_elevate(b):
     if ADMIN:
         return {"ok": True, "msg": "Zaten yönetici"}
-    params = f'"{os.path.abspath(__file__)}" --no-browser --wait-port --port {PORT}'
-    r = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, APP_DIR, 1)
+    exe, params, wdir = self_command(f"--no-browser --wait-port --port {PORT}")
+    r = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, wdir, 1)
     if r <= 32:
         return {"ok": False, "error": "Yükseltme iptal edildi"}
     threading.Timer(1.0, lambda: os._exit(0)).start()
@@ -3306,12 +3334,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, b"forbidden", "text/plain")
         u = urlparse(self.path)
         if u.path in ("/", "/index.html"):
-            with open(os.path.join(APP_DIR, "index.html"), "rb") as f:
+            with open(os.path.join(RES_DIR, "index.html"), "rb") as f:
                 html = f.read().replace(b"__SYSDASH_TOKEN__", TOKEN.encode())
             return self.send(200, html, "text/html; charset=utf-8")
         if u.path == "/favicon.ico":
             try:
-                with open(os.path.join(APP_DIR, "gozcu.ico"), "rb") as f:
+                with open(os.path.join(RES_DIR, "gozcu.ico"), "rb") as f:
                     return self.send(200, f.read(), "image/x-icon")
             except OSError:
                 return self.send(404, b"not found", "text/plain")

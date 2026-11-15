@@ -25,6 +25,15 @@ Sunucu yalnızca `127.0.0.1` üzerinde çalışır ve varsayılan olarak hiçbir
 Gereksinim: Windows 10/11, 64-bit Python 3.10+ ve `psutil` (`start.bat` eksikse kendisi kurar). Ağ izleme, güvenlik duvarı ve açılışta başlatma yönetici ister.
 Port 8799 doluysa sıradaki boş port kullanılır; `SYSDASH_PORT` ortam değişkeniyle değiştirilebilir.
 
+## Hazır .exe (Python gerekmez)
+
+[Releases](https://github.com/aranelpalantir/gozcu/releases) sayfasından `Gozcu.exe` dosyasını indirip çift tıklayın; tarayıcıda panel açılır (konsol penceresi yoktur).
+
+- **Yönetici modu:** ağ izleme, güvenlik duvarı ve açılışta başlatma için yönetici gerekir. `Gozcu.exe`'ye sağ tıklayıp *Yönetici olarak çalıştır* deyin ya da panelde sol alttaki *Yönetici olarak yeniden başlat* düğmesini kullanın.
+- **Verileriniz:** ayarlar, yedekler ve geçmiş `%LOCALAPPDATA%\Gozcu` klasöründe durur. IP veritabanı için `geodata` klasörünü bu klasöre ya da `Gozcu.exe`'nin yanına koyun (`geodata/README.md`).
+- **Kapatmak için:** panelde sol alttaki *Gözcü'yü kapat*.
+- **Windows SmartScreen / antivirüs uyarısı:** exe dijital olarak **imzalı değildir**, bu yüzden SmartScreen "Windows bilgisayarınızı korudu" diyebilir (*Daha fazla bilgi → Yine de çalıştır*), bazı antivirüsler de (PyInstaller ile paketlenen, güvenlik duvarı/ağ izleyen programlarda sık görülen) yanlış alarm verebilir. Emin olmak için `Gozcu.exe.sha256` ile karşılaştırın ya da kodu inceleyip kendiniz derleyin: `build.ps1` (64-bit Python gerekir; çıktı `dist\Gozcu.exe`). Sürüm dosyaları GitHub Actions ile bu depodaki koddan derlenir.
+
 ## Sekmeler
 
 | Sekme | İçerik |

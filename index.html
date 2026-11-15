@@ -985,10 +985,10 @@ function renderFeed(){
   const rows = EVENTS.filter(e=>e.id>EVCUT && EVON.has(e.kind) && (!q||e.msg.toLowerCase().includes(q))).slice(-800).reverse();
   $("#evcount").textContent = rows.length+" olay";
   const f=$("#feed");
-  f.innerHTML = rows.length ? rows.map(e=>{const [l,c]=EVK[e.kind]||[e.kind,""]; return `<div class="ev ${e.level}" ${e.pid?`data-pid="${e.pid}" data-t="${e.t}" style="cursor:pointer"`:""}><span class="dim">${tm(e.t)}</span><span class="k"><span class="tag ${e.level==="high"?"bad":c}">${l}</span></span><span>${esc(e.msg)}${e.kind==="alert"&&e.cat&&e.name?` <button class="sm" data-sup="${esc(e.cat)}" data-n="${esc(e.name)}" data-m="${esc(e.msg.slice(0,160))}" title="Bu işlemin bu türdeki uyarılarını sustur">Sustur</button>`:""}</span></div>`;}).join("")
+  f.innerHTML = rows.length ? rows.map(e=>{const [l,c]=EVK[e.kind]||[e.kind,""]; return `<div class="ev ${e.level}" ${e.pid?`data-pid="${e.pid}" data-t="${e.t}" style="cursor:pointer"`:""}><span class="dim">${tm(e.t)}</span><span class="k"><span class="tag ${e.level==="high"?"bad":c}">${l}</span></span><span>${esc(e.msg)}${e.kind==="alert"&&e.cat&&e.name?` <button class="sm" data-sup="${esc(e.cat)}" data-n="${esc(e.name)}" data-p="${esc(e.parent||"")}" data-m="${esc(e.msg.slice(0,160))}" title="${e.parent?`Yalnızca üst işlemi ${esc(e.parent)} olan ${esc(e.name)} uyarılarını sustur`:"Bu işlemin bu türdeki uyarılarını sustur"}">Sustur</button>`:""}</span></div>`;}).join("")
     : '<div class="empty">Henüz olay yok. Panel açık kaldıkça başlayan programlar, yeni bağlantılar ve açılan portlar burada akacak.</div>';
 }
-$("#feed").addEventListener("click",e=>{ const sb=e.target.closest("[data-sup]"); if(sb){ suppressAlert(sb.dataset.sup,sb.dataset.n,sb.dataset.m); return; } if(e.target.closest("button")) return; const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid, r.dataset.t?+r.dataset.t:undefined);});
+$("#feed").addEventListener("click",e=>{ const sb=e.target.closest("[data-sup]"); if(sb){ suppressAlert(sb.dataset.sup,sb.dataset.n,sb.dataset.m,sb.dataset.p); return; } if(e.target.closest("button")) return; const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid, r.dataset.t?+r.dataset.t:undefined);});
 
 let FWLOG=[], FWLAST=0; const FWON=new Set(["ALLOW","DROP"]);
 $("#fwchips").innerHTML = `<span class="chip on" data-k="ALLOW">İzin verilen</span><span class="chip on" data-k="DROP">Engellenen</span><span class="chip on" data-k="SEND">Giden</span><span class="chip on" data-k="RECEIVE">Gelen</span><span class="chip on" data-k="HIDEMC" title="Hedefi multicast (224-239.x.x.x, ff..) veya broadcast (…255) olan paketleri gizle: SSDP, mDNS, NetBIOS duyuruları vb.">Multicast/yayını gizle</span><span class="chip on" data-k="HIDELAN" title="Kaynağı yerel ağdan (192.168.x, 10.x, 172.16-31.x, 169.254.x) olan ve hedef portu NetBIOS (137/138), SSDP (1900), mDNS (5353), LLMNR (5355) veya WS-Discovery (3702) olan engellenmiş paketleri gizle">Yerel ağ gürültüsünü gizle</span>`;
@@ -1138,12 +1138,12 @@ function renderHist(){
 }
 $("#histdays").addEventListener("change",()=>{ HIST=null; loadHist(); }); $("#histq").addEventListener("input",renderHist);
 
-async function suppressAlert(cat,name,msg){
-  if(!await uiConfirm(`"${name}" için bu türdeki uyarılar bir daha gösterilmeyecek ve Telegram'a gönderilmeyecek.\n\nÖrnek: ${msg}\n\nİstediğiniz zaman "Susturulanlar" düğmesinden geri açabilirsiniz.`,{title:"Uyarıyı sustur",ok:"Sustur",danger:false})) return;
-  const r=await post("/api/suppress/add",{cat,name,example:msg}); r.ok?(toast("Uyarı susturuldu"),refreshPage(true)):toast(r.error,1); }
+async function suppressAlert(cat,name,msg,parent){
+  if(!await uiConfirm((parent?`"${name}" için, yalnızca üst işlemi "${parent}" olduğunda, bu türdeki uyarılar`:`"${name}" için bu türdeki uyarılar`)+` bir daha gösterilmeyecek ve Telegram'a gönderilmeyecek.\n\nÖrnek: ${msg}\n\nİstediğiniz zaman "Susturulanlar" düğmesinden geri açabilirsiniz.`,{title:"Uyarıyı sustur",ok:"Sustur",danger:false})) return;
+  const r=await post("/api/suppress/add",{cat,name,parent:parent||"",example:msg}); r.ok?(toast("Uyarı susturuldu"),refreshPage(true)):toast(r.error,1); }
 $("#supbtn").onclick=async()=>{
   const render=async ov=>{ const r=await api("/api/suppress"); const box=ov.querySelector("#suplist"); if(!box) return;
-    box.innerHTML = (r.rules||[]).length ? r.rules.map(x=>`<div class="fwi"><span style="flex:1"><b>${esc(x.name)}</b> <span class="muted">· ${esc(x.cat)}</span><br><span class="mono muted" style="font-size:11px">${esc(x.example||"")}</span></span><button class="sm" data-supdel="${esc(x.cat)}|${esc(x.name.toLowerCase())}">Geri aç</button></div>`).join("") : '<div class="muted">Susturulmuş uyarı yok.</div>'; };
+    box.innerHTML = (r.rules||[]).length ? r.rules.map(x=>`<div class="fwi"><span style="flex:1"><b>${esc(x.name)}</b> <span class="muted">· ${esc(x.cat)}${x.parent?` · üst işlem: ${esc(x.parent)}`:""}</span><br><span class="mono muted" style="font-size:11px">${esc(x.example||"")}</span></span><button class="sm" data-supdel="${esc(x.key||(x.cat+"|"+x.name.toLowerCase()))}">Geri aç</button></div>`).join("") : '<div class="muted">Susturulmuş uyarı yok.</div>'; };
   await uiAsk({title:"Susturulan uyarılar",text:"Bu işlem ve türdeki uyarılar gösterilmiyor ve Telegram'a gönderilmiyor.",html:'<div id="suplist" style="margin-top:12px;max-height:320px;overflow:auto"></div>',ok:"Kapat",nocancel:true,
     mount:ov=>{ render(ov); ov.addEventListener("click",async e=>{ const b=e.target.closest("[data-supdel]"); if(!b) return; await post("/api/suppress/remove",{key:b.dataset.supdel}); render(ov); }); }});
 };

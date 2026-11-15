@@ -317,7 +317,7 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
       <div class="grid kpis" id="portkpis" style="margin-bottom:14px"></div>
       <div class="toolbar">
         <input type="search" id="portq" placeholder="Port, servis, işlem ara…">
-        <select id="portreach" title="Portun dışarıdan erişilebilir olup olmadığına göre süz"><option value="open_limited" selected>Dışarıdan erişilebilir (hepsi)</option><option value="open">Her adresten (internet dahil)</option><option value="lan">Yalnız yerel ağdan (ev/ofis ağı)</option><option value="limited">Kısıtlı (belirli adresler, ör. Tailscale)</option><option value="blocked">Güvenlik duvarı engelliyor (zararsız)</option><option value="local">Yalnız bu bilgisayar</option><option value="">Tümü</option></select>
+        <select id="portreach" title="Portun dışarıdan erişilebilir olup olmadığına göre süz"><option value="open_limited" selected>Dışarıdan erişilebilir: hepsi (aşağıdaki 3 grup)</option><optgroup label="Dışarıdan erişilebilir olanlar, kapsama göre"><option value="open">↳ Her adresten (internet dahil)</option><option value="lan">↳ Yalnız yerel ağdan (ev/ofis ağı)</option><option value="limited">↳ Kısıtlı (belirli adresler, ör. Tailscale)</option></optgroup><optgroup label="Dışarıdan erişilemeyenler"><option value="blocked">Güvenlik duvarı engelliyor (zararsız)</option><option value="local">Yalnız bu bilgisayar</option></optgroup><option value="">Tümü</option></select>
         <select id="portbind" title="Portun hangi ağ kartlarında dinlediğine göre süz"><option value="">Dinleme: tümü</option><option value="both">Hem içeriden hem dışarıdan (tüm ağ kartları)</option><option value="nic">Yalnız belirli bir ağ kartı üzerinden</option><option value="in">Yalnız içeriden (bu bilgisayar)</option></select>
         <label class="chk"><input type="checkbox" id="porttcp"> Sadece TCP</label>
         <span class="grow"></span><span class="count" id="portcount"></span>
@@ -1015,6 +1015,8 @@ function renderPorts(){
     ["Kısıtlı erişim",cnt("limited"),"ok","limited","Yalnızca belirli adreslerden erişilebilir (ör. Tailscale)"],
     ["Güvenlik duvarı engelliyor",cnt("blocked"),"ok","blocked","Program dinliyor ama dışarıdan erişilemez: zararsız"],
     ["Yalnız bu bilgisayar",cnt("local"),"","local","Yalnızca 127.0.0.1 üzerinde dinleyenler"]];
+  const nOpt={open_limited:cnt("open")+cnt("lan")+cnt("limited"),open:cnt("open"),lan:cnt("lan"),limited:cnt("limited"),blocked:cnt("blocked"),local:cnt("local"),"":G.length};
+  $("#portreach").querySelectorAll("option").forEach(o=>{ if(o.dataset.l===undefined) o.dataset.l=o.textContent; o.textContent=o.dataset.l+" ("+nOpt[o.value]+")"; });
   $("#portkpis").innerHTML=k.map(([l,v,c,key,hint])=>`<div class="card kpi click" data-reach="${key}" title="${esc(hint)}"><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`).join("");
   /* menüdeki rozetle aynı kural: dışarıdan erişilebilir, yüksek/orta riskli, port başına tek satır (TCP) */
   const att=[], seenp=new Set();

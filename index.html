@@ -924,7 +924,7 @@ function renderPorts(){
   const q=$("#portq").value.toLowerCase(), ex=$("#portexp").checked, tcp=$("#porttcp").checked;
   const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && (!ex||p.exposed) && (!tcp||p.proto==="TCP"));
   const RV={high:3,medium:2,low:1,none:0};
-  const FW={blocked:'<span class="tag ok">Engelli</span>',allowed:'<span class="tag warn">İzinli</span>',default:'<span class="tag">Varsayılan (engel)</span>',local:'<span class="tag">Yalnız yerel</span>'};
+  const FW={blocked:'<span class="tag ok">Engelli</span>',restricted:'<span class="tag ok" title="İzin kuralı yalnızca belirli uzak adreslerle sınırlı (ör. Tailscale)">Kısıtlı (belirli adresler)</span>',unknown:'<span class="tag">Bilinmiyor</span>',allowed:'<span class="tag warn">İzinli</span>',default:'<span class="tag">Varsayılan (engel)</span>',local:'<span class="tag">Yalnız yerel</span>'};
   const n = table($("#porttable"),"ports",[
     {k:"risk",l:"Risk",s:p=>RV[p.risk],f:p=>RISK[p.risk]},
     {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b>`},

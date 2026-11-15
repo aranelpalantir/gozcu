@@ -1705,7 +1705,8 @@ def api_overview(q):
               "est": len(est), "listen_tcp": len({(c["lip"], c["lport"]) for c in listen if c["proto"] == "TCP"}),
               "listen_udp": len({(c["lip"], c["lport"]) for c in listen if c["proto"] == "UDP"}),
               "remote_hosts": len({c["rip"] for c in est if c["rclass"] == "public"}),
-              "risky": len({c["lport"] for c in listen if "risky_listen" in c["flags"] and c["proto"] == "TCP"}),
+              "risky": len({r["lport"] for r in compute_ports(CACHE["fw_rules"].v or [])
+                            if r["proto"] == "TCP" and r["exposed"] and r["risk"] in ("high", "medium")}),
               "alerts": len(al), "alerts_high": sum(1 for a in al if a["level"] == "high"),
               "unsigned": len({p["exe"].lower() for p in procs if p["exe"] and (sig_of(p["exe"]) or {}).get("s") == "NotSigned"})}
     vmd = s.get("vm", {})
@@ -1848,10 +1849,10 @@ def api_connections(q):
     return {"conns": rows, "geo": bool(GEO and GEO.ready)}
 
 
-def api_ports(q):
+def compute_ports(fw):
+    """Dinleyen soketler + risk + güvenlik duvarı durumu (uzak adres sınırı dahil)."""
     rows = []
     seen = set()
-    fw, _ = CACHE["fw_rules"].get()
     inbound_allow = [r for r in fw if r["dir"] == "in" and r["action"] == "allow" and r["enabled"]]
     inbound_block = [r for r in fw if r["dir"] == "in" and r["action"] == "block" and r["enabled"]]
 
@@ -1879,13 +1880,18 @@ def api_ports(q):
                 return False
             if not app and not r["svc"] and r["lport"] in ("*", "") and r["proto"] == "Tümü":
                 return False  # cok genel kurallari sayma
+            if r["svc"] and r["lport"] in ("*", ""):
+                return False  # servise ozel 'her port' kurali: ayni svchost'taki baska servisin portuna uygulanamaz
             return port_match(r["lport"], port)
         b = [r["name"] for r in inbound_block if match(r)]
-        a = [r["name"] for r in inbound_allow if match(r)]
+        ar = [r for r in inbound_allow if match(r)]
         if b:
             return "blocked", b[:3]
-        if a:
-            return "allowed", a[:3]
+        if ar:
+            # tum izin kurallari belirli uzak adreslerle sinirliysa (ornegin Tailscale) port internete acik degildir
+            if all(r["raddr"] not in ("*", "") for r in ar):
+                return "restricted", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]]
+            return "allowed", [r["name"] for r in ar[:3]]
         return "default", []
 
     for c in MON.snapshot["conns"]:
@@ -1898,19 +1904,31 @@ def api_ports(q):
         info = RISKY_PORTS.get(c["lport"])
         scope = ip_class(c["lip"])
         exposed = scope != "loopback"
-        fws, fwr = fw_state(c["proto"], c["lport"], c["exe"]) if exposed else ("local", [])
+        if not exposed:
+            fws, fwr = "local", []
+        elif not fw:
+            fws, fwr = "unknown", []      # kurallar okunamadi: durumu bilmiyoruz, riski dusurme
+        else:
+            fws, fwr = fw_state(c["proto"], c["lport"], c["exe"])
         risk = "none"
         if exposed:
             risk = info[1] if info else "low"
             if fws in ("blocked", "default"):
                 # gelen trafik kural ya da varsayilan politika ile engelli -> bir seviye dusur
                 risk = {"high": "medium", "medium": "low", "low": "none"}.get(risk, risk)
+            elif fws == "restricted":
+                risk = "low" if risk in ("high", "medium") else risk
         s = sig_of(c["exe"])
         rows.append({**c, "svc_name": info[0] if info else "", "risk": risk, "why": info[2] if info else "",
                      "scope": scope, "exposed": exposed, "fw": fws, "fw_rules": fwr,
                      "sig": s["s"] if s else "",
                      "clients": sum(1 for x in MON.snapshot["conns"] if x["dir"] == "in" and x["lport"] == c["lport"] and x["pid"] == c["pid"])})
-    return {"ports": rows, "fw_loaded": bool(fw)}
+    return rows
+
+
+def api_ports(q):
+    fw, _ = CACHE["fw_rules"].get()
+    return {"ports": compute_ports(fw or []), "fw_loaded": bool(fw)}
 
 
 def api_events(q):

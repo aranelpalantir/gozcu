@@ -101,6 +101,12 @@ td{padding:5px 10px;border-bottom:1px solid #1a2130;white-space:nowrap;max-width
 tr.click{cursor:pointer}
 tbody tr:hover td{background:var(--hover)}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{display:block;color:var(--muted);font-size:11.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+.sub.ok{color:var(--ok)}.sub.info{color:var(--info)}
+td.wrap{white-space:normal;min-width:120px;max-width:300px}
+td.cap{max-width:260px}
+td.wrap .tag{margin:1px 3px 1px 0}
+.tw{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .tag{display:inline-block;padding:0 6px;border-radius:4px;font-size:11px;line-height:17px;margin-right:3px;background:#1d2433;color:var(--muted);border:1px solid #273044}
 .tag.bad{background:#3a1312;color:#ffb1ab;border-color:#5c201d}
 .tag.warn{background:#352a0c;color:#f2cf73;border-color:#58461a}
@@ -630,6 +636,20 @@ function setBadge(id, n, cls, title){ const b=$("#b-"+id); if(!b) return; b.styl
 
 /* ---------- tablo bileşeni ---------- */
 const TS = {};
+/* Tablo kutusunu görünür alana sığdır: yatay kaydırma çubuğu her zaman ekranda görünsün (sayfa kaydırmadan) */
+function fitTw(el){ if(!el||el.classList.contains("short")||!el.offsetParent) return;
+  const m=$("#main"); const top=el.getBoundingClientRect().top+(m?m.scrollTop:0);
+  el.style.maxHeight=Math.max(220, innerHeight-top-16)+"px"; }
+addEventListener("resize",()=>$$(".tw:not(.short)").forEach(fitTw));
+/* Uzak adres hücresi: 1. satır ip:port, 2. satır (silik) alan adı · ülke · kuruluş */
+function remoteCell(x, proto){
+  if(!x.rip) return '<span class="dim">–</span>';
+  const bits=[]; const tn={private:"Yerel ağ",loopback:"Loopback",linklocal:"Link-local",multicast:"Multicast",any:"Tümü"}[x.rclass];
+  if(tn) bits.push(tn);
+  const host = x.host ? x.host : (x.host===null&&x.rclass!=="loopback"&&x.rclass!=="private" ? "çözülüyor…" : ""); if(host) bits.push(host);
+  if(x.cc) bits.push(x.cc+" "+ccName(x.cc)); if(x.org) bits.push(x.org);
+  const pr = proto ? `<span class="dim">${esc(proto)}</span> ` : "";
+  return `<div>${pr}<span class="mono">${esc(addr(x.rip,x.rport))}</span></div>`+(bits.length?`<span class="sub" title="${esc(bits.join(" · "))}">${esc(bits.join(" · "))}</span>`:""); }
 function table(el, id, cols, rows, opts={}){
   const st = TS[id] || (TS[id] = {k: opts.sort||cols[0].k, d: opts.desc!==false});
   const col = cols.find(c=>c.k===st.k) || cols[0];
@@ -637,16 +657,16 @@ function table(el, id, cols, rows, opts={}){
   rows = rows.slice().sort((a,b)=>{ let x=sv(a), y=sv(b); if(x==null) x=""; if(y==null) y="";
     const r = (typeof x==="number"&&typeof y==="number") ? x-y : String(x).localeCompare(String(y),"tr",{numeric:true}); return st.d?-r:r; });
   const max = opts.max||1500, shown = rows.slice(0,max);
-  el._rows = shown; el._click = opts.click; el._cols = cols; el._all = rows; el._tid = id;
+  el._rows = shown; el._click = opts.click; el._cols = cols; el._all = rows; el._tid = id; el._csv = opts.csv || null;
   const tb = el.previousElementSibling;
   if(tb && tb.classList.contains("toolbar") && !tb.querySelector(".csvbtn")){ const b=document.createElement("button"); b.className="sm csvbtn"; b.textContent="⬇ CSV";
     b.title="Tablodaki (filtrelenmiş) kayıtları Excel uyumlu CSV olarak indir"; b.onclick=()=>exportCsv(el); tb.appendChild(b); }
-  if(!rows.length){ el.innerHTML = `<div class="empty">${opts.empty||"Kayıt yok"}</div>`; return rows.length; }
+  if(!rows.length){ el.innerHTML = `<div class="empty">${opts.empty||"Kayıt yok"}</div>`; fitTw(el); return rows.length; }
   const sc = el.scrollTop;
   el.innerHTML = `<table><thead><tr>${cols.map(c=>`<th data-k="${c.k}" class="${c.num?"num ":""}${c.k===st.k?"sorted"+(st.d?"":" asc"):""}" ${c.w?`style="width:${c.w}"`:""}>${c.l}</th>`).join("")}</tr></thead><tbody>${
     shown.map((r,i)=>`<tr data-i="${i}" class="${opts.click?"click":""}">${cols.map(c=>`<td class="${c.num?"num":""} ${c.cls||""}" ${c.t?`title="${esc(c.t(r))}"`:""}>${c.f?c.f(r):esc(r[c.k])}</td>`).join("")}</tr>`).join("")
   }</tbody></table>${rows.length>max?`<div class="empty">İlk ${max} kayıt gösteriliyor (${rows.length} toplam). Filtreyi daraltın.</div>`:""}`;
-  el.scrollTop = sc;
+  el.scrollTop = sc; fitTw(el);
   if(!el._bound){ el._bound=true;
     el.addEventListener("click", e=>{
       const th = e.target.closest("th"); if(th){ const s=TS[id]; if(s.k===th.dataset.k) s.d=!s.d; else {s.k=th.dataset.k; s.d=true;} refreshPage(); return; }
@@ -658,7 +678,7 @@ function table(el, id, cols, rows, opts={}){
 }
 
 function exportCsv(el){
-  const cols = (el._cols||[]).filter(c=>!c.k.startsWith("_")||c.k==="_ord"), rows = el._all||[];
+  const cols = el._csv ? el._csv.map(c=>({k:c.l,l:c.l,v:c.v})) : (el._cols||[]).filter(c=>!c.k.startsWith("_")||c.k==="_ord"), rows = el._all||[];
   if(!rows.length){ toast("Dışa aktarılacak kayıt yok",1); return; }
   const cell = (c,r)=>{ let v = c.v ? c.v(r) : r[c.k]; if(v==null&&c.s) v=c.s(r); if(v==null) v="";
     if(Array.isArray(v)) v=v.join(" "); else if(typeof v==="boolean") v=v?"Evet":"Hayır";
@@ -765,18 +785,19 @@ function renderProcs(){
   const n = table($("#proctable"),tree?"proctree":"procs",[
     nameCol,
     {k:"risk",l:"Risk",num:1,f:p=>p.risk?`<span class="tag ${p.risk>=50?"bad":p.risk>=25?"warn":"info"}">${p.risk}</span>`:'<span class="dim">–</span>',t:p=>p.why||""},
-    {k:"pid",l:"PID",num:1},
+    {k:"pid",l:"PID",num:1,t:p=>p.created?"Başlangıç: "+dt(p.created)+" · iş parçacığı: "+p.threads:""},
     {k:"user",l:"Kullanıcı",f:p=>p.user?esc(p.user):'<span class="dim">sistem</span>'},
     {k:"cpu",l:"CPU",num:1,f:p=>`<span class="${p.cpu>50?"bad":p.cpu>15?"warn":""}">${p.cpu.toFixed(1)}%</span>`},
     {k:"mem",l:"Bellek",num:1,f:p=>bytes(p.mem)},
     {k:"io",l:"Disk G/Ç",num:1,f:p=>p.io?rate(p.io):'<span class="dim">–</span>'},
-    {k:"threads",l:"İş p.",num:1},
-    {k:"conns",l:"Bağlantı",num:1,f:p=>p.conns||'<span class="dim">–</span>'},
-    {k:"listen",l:"Dinlediği portlar",s:p=>p.listen.length,f:p=>esc(p.listen.slice(0,6).join(" "))+(p.listen.length>6?" …":"")},
+    {k:"conns",l:"Ağ",num:1,f:p=>(p.conns?`${p.conns} bağl.`:'<span class="dim">–</span>')+(p.listen.length?`<span class="sub">dinler: ${esc(p.listen.slice(0,5).join(" "))}${p.listen.length>5?" …":""}</span>`:""),t:p=>p.listen.length?"Dinlediği portlar: "+p.listen.join(" "):""},
     {k:"sig",l:"İmza",f:p=>sigTag(p.sig),t:p=>p.signer||""},
-    {k:"created",l:"Başlangıç",f:p=>p.created?`<span class="muted">${dt(p.created)}</span>`:""},
-    {k:"exe",l:"Yol",f:p=>`<span class="mono muted">${esc(p.exe)}</span>`,t:p=>p.exe},
-  ], rows, tree ? {sort:"_ord", desc:false, click:p=>openProc(p.pid)} : {sort:"cpu", click:p=>openProc(p.pid)});
+    {k:"exe",l:"Yol",cls:"cap",f:p=>`<span class="mono muted">${esc(p.exe)}</span>`,t:p=>p.exe},
+  ], rows, Object.assign(tree ? {sort:"_ord", desc:false, click:p=>openProc(p.pid)} : {sort:"cpu", click:p=>openProc(p.pid)}, {
+    csv:[{l:"İşlem",v:p=>p.name},{l:"PID",v:p=>p.pid},{l:"Üst PID",v:p=>p.ppid},{l:"Risk",v:p=>p.risk||0},{l:"Kullanıcı",v:p=>p.user||""},{l:"CPU %",v:p=>p.cpu},
+         {l:"Bellek (bayt)",v:p=>p.mem},{l:"Disk G/Ç (bayt/sn)",v:p=>Math.round(p.io||0)},{l:"İş parçacığı",v:p=>p.threads},{l:"Bağlantı",v:p=>p.conns||0},
+         {l:"Dinlediği portlar",v:p=>(p.listen||[]).join(" ")},{l:"İmza",v:p=>p.sig||""},{l:"İmzalayan",v:p=>p.signer||""},
+         {l:"Başlangıç",v:p=>p.created?dt(p.created):""},{l:"Yol",v:p=>p.exe||""}]}));
   $("#proccount").textContent=`${n} / ${PROCS.length} işlem`;
 }
 function procTree(all){
@@ -891,23 +912,19 @@ function renderConns(){
     && (!dir||c.dir===dir) && (!st||c.status===st) && (!cls||c.rclass===cls)
     && (!nolo||!(c.rclass==="loopback"||(c.dir==="listen"&&/^(127\.|::1)/.test(c.lip)))) && (!fl||nFlags(c)));
   const n = table($("#conntable"),"conns",[
-    {k:"dir",l:"Yön",s:c=>({out:0,in:1,listen:2}[c.dir]??3)*10+(c.status==="ESTABLISHED"?0:1),f:c=>DIR[c.dir]||""},
-    {k:"name",l:"İşlem",f:c=>`<b>${esc(c.name)}</b> ${c.sig==="NotSigned"?sigTag("NotSigned"):""}`},
-    {k:"pid",l:"PID",num:1},
-    {k:"proto",l:"Prot."},
-    {k:"lport",l:"Yerel",f:c=>`<span class="mono">${esc(addr(c.lip,c.lport))}</span>`},
-    {k:"rip",l:"Uzak",f:c=>c.rip?`<span class="mono">${esc(addr(c.rip,c.rport))}</span>`:'<span class="dim">–</span>'},
-    {k:"host",l:"Uzak host",f:c=>c.host?esc(c.host):(c.host===null&&c.rip&&c.rclass!=="loopback"?'<span class="dim">çözülüyor…</span>':'<span class="dim">–</span>'),t:c=>c.host||""},
-    {k:"status",l:"Durum",f:c=>`<span class="${c.status==="ESTABLISHED"?"ok":c.status==="LISTEN"?"info":"muted"}">${esc(c.status)}</span>`},
-    {k:"rclass",l:"Adres türü",f:c=>CLS[c.rclass]||""},
-    {k:"cc",l:"Ülke",f:geoCell,t:c=>ccName(c.cc)},
-    {k:"org",l:"Kuruluş (ASN)",f:orgCell,t:c=>c.org?`AS${c.asn} ${c.org}`:""},
-    {k:"flags",l:"İşaretler",s:nFlags,f:c=>(isTrusted(c)?'<span class="tag ok" title="Güvenilir listesinde">Güvenilir</span>':"")+flags(effFlags(c))+flags(c.pflags)},
-    {k:"_a",l:"",f:c=>{ const i=CONNS.indexOf(c);
+    {k:"dir",l:"Yön / durum",s:c=>({out:0,in:1,listen:2}[c.dir]??3)*10+(c.status==="ESTABLISHED"?0:1),f:c=>(DIR[c.dir]||"")+`<span class="sub ${c.status==="ESTABLISHED"?"ok":c.status==="LISTEN"?"info":""}">${esc(c.status)}</span>`},
+    {k:"name",l:"İşlem",f:c=>`<b>${esc(c.name)}</b> <span class="dim mono">${c.pid}</span> ${c.sig==="NotSigned"?sigTag("NotSigned"):""}`},
+    {k:"lport",l:"Yerel",f:c=>`<span class="dim">${c.proto}</span> <span class="mono">${esc(addr(c.lip,c.lport))}</span>`},
+    {k:"rip",l:"Uzak",f:c=>remoteCell(c)},
+    {k:"flags",l:"İşaretler / eylem",cls:"wrap",s:nFlags,f:c=>{ const i=CONNS.indexOf(c);
       const trustBtn = isTrusted(c)||TRUST.has(tkey(c)) ? `<button class="sm" onclick="toggleTrust(${i})">Güvenme</button>`
         : c.flags.some(f=>SOFTFLAGS.includes(f)) ? `<button class="sm" onclick="toggleTrust(${i})" title="${esc(c.name)} : ${esc(c.lport)} için riskli port / internetten gelen uyarısını gizle">Güven</button>` : "";
-      return trustBtn + (c.rip&&c.rclass==="public"?` <button class="sm" onclick="blockIp('${esc(c.rip)}')">Engelle</button>`:""); }},
-  ], rows, {sort:"dir", desc:false, click:c=>c.pid&&openProc(c.pid)});
+      return (isTrusted(c)?'<span class="tag ok" title="Güvenilir listesinde">Güvenilir</span>':"")+flags(effFlags(c))+flags(c.pflags)
+        +(trustBtn?" "+trustBtn:"")+(c.rip&&c.rclass==="public"?` <button class="sm" onclick="blockIp('${esc(c.rip)}')">Engelle</button>`:""); }},
+  ], rows, {sort:"dir", desc:false, click:c=>c.pid&&openProc(c.pid),
+    csv:[{l:"Yön",v:c=>c.dir},{l:"İşlem",v:c=>c.name},{l:"PID",v:c=>c.pid},{l:"Prot.",v:c=>c.proto},{l:"Yerel",v:c=>addr(c.lip,c.lport)},
+         {l:"Uzak",v:c=>c.rip?addr(c.rip,c.rport):""},{l:"Uzak host",v:c=>c.host||""},{l:"Durum",v:c=>c.status},{l:"Adres türü",v:c=>c.rclass||""},
+         {l:"Ülke",v:c=>c.cc||""},{l:"Kuruluş",v:c=>c.org||""},{l:"İşaretler",v:c=>[...(c.flags||[]),...(c.pflags||[])].join(" ")}]});
   $("#conncount").textContent=`${n} / ${CONNS.length} kayıt`;
   const est=CONNS.filter(c=>c.status==="ESTABLISHED");
   const k=[["Kurulu bağlantı",est.length],["Giden",est.filter(c=>c.dir==="out").length],["Gelen",est.filter(c=>c.dir==="in").length],
@@ -935,10 +952,8 @@ function renderPorts(){
   const FW={blocked:'<span class="tag ok">Engelli</span>',restricted:'<span class="tag ok" title="İzin kuralı yalnızca belirli uzak adreslerle sınırlı (ör. Tailscale)">Kısıtlı (belirli adresler)</span>',unknown:'<span class="tag">Bilinmiyor</span>',allowed:'<span class="tag warn">İzinli</span>',default:'<span class="tag">Varsayılan (engel)</span>',local:'<span class="tag">Yalnız yerel</span>'};
   const n = table($("#porttable"),"ports",[
     {k:"risk",l:"Risk",s:p=>RV[p.risk],f:p=>RISK[p.risk]},
-    {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b>`},
-    {k:"proto",l:"Prot."},
+    {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b> <span class="dim">${p.proto}</span>`+(p.svc_name?`<span class="sub" style="text-align:right">${esc(p.svc_name)}</span>`:"")},
     {k:"lip",l:"Bağlı adres",f:p=>`<span class="mono">${esc(p.lip)}</span> ${p.scope==="any"?'<span class="tag warn">tüm arayüzler</span>':""}`},
-    {k:"svc_name",l:"Servis",f:p=>esc(p.svc_name)||'<span class="dim">–</span>'},
     {k:"name",l:"İşlem",f:p=>`<b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> ${p.sig==="NotSigned"?sigTag("NotSigned"):""}`},
     {k:"fw",l:"Güvenlik duvarı",f:p=>FW[p.fw]||"",t:p=>(p.fw_rules||[]).join(" | ")},
     {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
@@ -1085,25 +1100,22 @@ function renderEtw(){
   const fl = (ETW.flows||[]).filter(ok);
   const n = table($("#etwflows"),"etwflows",[
     {k:"name",l:"İşlem",f:x=>`${esc(x.name)} <span class="dim">${x.pid}</span>`},
-    {k:"proto",l:"Prot."},
-    {k:"rip",l:"Uzak adres",f:x=>`<span class="mono">${esc(x.rip)}:${x.rport}</span>${x.host?` <span class="dim">${esc(x.host)}</span>`:""}`},
-    {k:"rclass",l:"Tür",f:x=>CLS[x.rclass]||""},
-    {k:"cc",l:"Ülke",f:geoCell,t:x=>ccName(x.cc)},
-    {k:"org",l:"Kuruluş",f:orgCell,t:x=>x.org?`AS${x.asn} ${x.org}`:""},
-    {k:"lport",l:"Yerel port",num:1},
+    {k:"rip",l:"Uzak",f:x=>remoteCell(x,x.proto),t:x=>`yerel port ${x.lport}`},
     {k:"tx",l:"Giden",num:1,s:x=>x.tx,f:x=>bytes(x.tx)+` <span class="dim">(${x.txn})</span>`},
     {k:"rx",l:"Gelen",num:1,s:x=>x.rx,f:x=>bytes(x.rx)+` <span class="dim">(${x.rxn})</span>`},
     {k:"last",l:"Son",s:x=>x.last,f:x=>`<span class="muted">${tm(x.last)}</span>`},
     {k:"blk",l:"",s:x=>0,f:x=>x.rclass==="public"?`<button class="sm" onclick="blockIp('${esc(x.rip)}')" title="${esc(x.rip)} adresini güvenlik duvarında engelle">IP engelle</button>`+(x.cc?` <button class="sm" onclick="blockCc('${esc(x.cc)}')" title="${esc(ccName(x.cc))} ülkesinin tüm adres aralıklarını engelle">Ülkeyi engelle</button>`:""):""},
-  ], fl, {sort:"last",max:500,empty:"Bağlantı trafiği yok",click:x=>{ if(x.pid>0) openProc(x.pid); }});
+  ], fl, {sort:"last",max:500,empty:"Bağlantı trafiği yok",click:x=>{ if(x.pid>0) openProc(x.pid); },
+    csv:[{l:"İşlem",v:x=>x.name},{l:"PID",v:x=>x.pid},{l:"Prot.",v:x=>x.proto},{l:"Uzak",v:x=>addr(x.rip,x.rport)},{l:"Alan adı",v:x=>x.host||""},{l:"Tür",v:x=>x.rclass||""},
+         {l:"Ülke",v:x=>x.cc||""},{l:"Kuruluş",v:x=>x.org||""},{l:"Yerel port",v:x=>x.lport},{l:"Giden (bayt)",v:x=>x.tx},{l:"Gelen (bayt)",v:x=>x.rx},
+         {l:"Son",v:x=>new Date(x.last*1000).toLocaleString("tr-TR")}]});
   $("#etwcount").textContent = `${n} bağlantı · toplam ↗ ${bytes(ETW.total.tx)} ↙ ${bytes(ETW.total.rx)}`;
   table($("#etwrows"),"etwrows",[
     {k:"id",l:"Zaman",s:r=>r.id,f:r=>`<span class="muted">${tm(r.t)}</span>`},
     {k:"dir",l:"Yön",f:r=>r.dir==="out"?DIR.out:DIR.in},
     {k:"name",l:"İşlem",f:r=>`${esc(r.name)} <span class="dim">${r.pid}</span>`},
-    {k:"proto",l:"Prot."},
     {k:"lip",l:"Yerel",f:r=>`<span class="mono">${esc(r.lip)}:${r.lport}</span>`},
-    {k:"rip",l:"Uzak",f:r=>`<span class="mono">${esc(r.rip)}:${r.rport}</span>${r.host?` <span class="dim">${esc(r.host)}</span>`:""}`},
+    {k:"rip",l:"Uzak",f:r=>remoteCell(r,r.proto)},
     {k:"size",l:"Boyut",num:1,s:r=>r.size,f:r=>bytes(r.size)},
     {k:"blk",l:"",s:r=>0,f:r=>r.rclass==="public"?`<button class="sm" onclick="blockIp('${esc(r.rip)}')" title="${esc(r.rip)} adresini güvenlik duvarında engelle">IP engelle</button>`:""},
   ], ETWROWS.filter(ok), {sort:"id",max:500,empty:"Aktarım yok",click:r=>{ if(r.pid>0) openProc(r.pid); }});

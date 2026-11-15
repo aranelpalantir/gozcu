@@ -1,0 +1,14 @@
+# Kişisel / yerel veriler - asla depoya girmesin
+telegram.json
+nettraffic.json
+baseline.json
+fw_snapshot.json
+backups/
+*.tmp
+
+# Önbellek
+__pycache__/
+*.pyc
+
+# İndirilen IP veritabanları (geodata/README.md'ye bakın)
+geodata/*.csv.gz

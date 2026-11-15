@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gözcü</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E %3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22#1b6fa0%22/%3E%3Cstop offset=%221%22 stop-color=%22#4cc2ff%22/%3E%3C/linearGradient%3E%3C/defs%3E %3Cpath d=%22M32 3 L57 11.5 V30 C57 46 46 56 32 61 C18 56 7 46 7 30 V11.5 Z%22 fill=%22url(#g)%22/%3E %3Cpath d=%22M13 31 Q32 12 51 31 Q32 50 13 31 Z%22 fill=%22#eaf6ff%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%229%22 fill=%22#0b3556%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%224%22 fill=%22#04121c%22/%3E %3Ccircle cx=%2235%22 cy=%2228%22 r=%221.6%22 fill=%22#fff%22/%3E %3C/svg%3E">
+<style>
+:root{
+  --bg:#0a0d13; --panel:#111620; --panel2:#171d2a; --hover:#1d2534; --border:#232b3b; --border2:#2e384b;
+  --text:#d9dfea; --muted:#8792a8; --dim:#5d677b;
+  --accent:#4cc2ff; --ok:#3fb950; --warn:#e3b341; --bad:#f85149; --info:#58a6ff; --violet:#b48cff;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+a{color:var(--accent);text-decoration:none}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:5px 11px;cursor:pointer}
+button:hover{background:var(--hover);border-color:#3b4760}
+button.primary{background:#14425e;border-color:#1e6a96;color:#e6f6ff}
+button.primary:hover{background:#185479}
+button.danger{background:#4a1716;border-color:#7a2624;color:#ffd9d6}
+button.danger:hover{background:#5e1d1b}
+button.sm{padding:2px 8px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+input,select{font:inherit;color:var(--text);background:#0d121b;border:1px solid var(--border2);border-radius:6px;padding:5px 9px;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);cursor:pointer;user-select:none}
+.app{display:grid;grid-template-columns:220px 1fr;height:100vh}
+/* sidebar */
+.side{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.brand{padding:16px 16px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.brand .logo{width:30px;height:30px;display:grid;place-items:center}.brand .logo svg{width:30px;height:30px;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))}
+.brand b{font-size:15px;letter-spacing:.2px}
+.brand small{display:block;color:var(--muted);font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav{padding:8px;overflow:auto;flex:1}
+nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--muted);margin-bottom:1px}
+nav a:hover{background:var(--hover);color:var(--text)}
+nav a.on{background:#152234;color:#e8f4ff;box-shadow:inset 2px 0 0 var(--accent)}
+nav a svg{width:16px;height:16px;flex:none;opacity:.85}
+nav a .badge{margin-left:auto}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:9px;font-size:11px;line-height:18px;text-align:center;background:var(--panel2);color:var(--muted);font-variant-numeric:tabular-nums}
+.badge.bad{background:#4a1716;color:#ffb4ae}.badge.warn{background:#3d3010;color:#f5d27a}.badge.ok{background:#11331b;color:#8ee3a0}
+.sidefoot{padding:12px;border-top:1px solid var(--border);display:grid;gap:8px;font-size:12px;color:var(--muted)}
+.priv{display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.info{background:var(--info)}
+/* main */
+main{overflow:auto;min-width:0}
+.top{position:sticky;top:0;z-index:5;background:rgba(10,13,19,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:12px 22px;display:flex;align-items:center;gap:14px}
+.top h1{font-size:17px;margin:0;font-weight:600}
+.top .sub{color:var(--muted);font-size:12px}
+.top .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.page{padding:18px 22px 40px;display:none}
+.page.on{display:block}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;min-width:0}
+.card h3{margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:8px}
+.card h3 .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.card h3{white-space:nowrap}
+.kpi .v{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi .s{color:var(--dim);font-size:11.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi canvas{width:100%;height:34px;display:block;margin-top:6px}
+.kpi.click{cursor:pointer}.kpi.click:hover{border-color:var(--border2)}
+.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1200px){.three{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.two,.three{grid-template-columns:1fr}.app{grid-template-columns:64px 1fr}nav a span,.brand div,.sidefoot{display:none}}
+.chart{width:100%;height:170px;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)}.dim{color:var(--dim)}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}
+.list{display:grid;gap:2px}
+.li{display:grid;grid-template-columns:1fr auto;gap:10px;padding:5px 6px;border-radius:5px;align-items:center}
+.li:hover{background:var(--hover)}
+.li .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:6px;border-radius:3px;background:#1c2433;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.cores{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:5px}
+.core{height:46px;background:#0d121b;border:1px solid var(--border);border-radius:5px;position:relative;overflow:hidden}
+.core i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#4cc2ff,#1d6f9c)}
+.core span{position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-family:var(--mono);text-shadow:0 1px 2px #000}
+/* tables */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.toolbar .grow{flex:1}
+.toolbar input[type=search]{min-width:240px}
+.tw{overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--panel);max-height:calc(100vh - 210px)}
+.tw.short{max-height:420px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{position:sticky;top:0;background:#141a26;color:var(--muted);font-weight:600;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border2);white-space:nowrap;cursor:pointer;user-select:none;font-size:12px;z-index:1}
+th:hover{color:var(--text)}
+th.sorted::after{content:" ▾";color:var(--accent)}
+th.sorted.asc::after{content:" ▴"}
+td{padding:5px 10px;border-bottom:1px solid #1a2130;white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+tr.click{cursor:pointer}
+tbody tr:hover td{background:var(--hover)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:0 6px;border-radius:4px;font-size:11px;line-height:17px;margin-right:3px;background:#1d2433;color:var(--muted);border:1px solid #273044}
+.tag.bad{background:#3a1312;color:#ffb1ab;border-color:#5c201d}
+.tag.warn{background:#352a0c;color:#f2cf73;border-color:#58461a}
+.tag.ok{background:#0f2c18;color:#86dc99;border-color:#1c4a29}
+.tag.info{background:#0f2440;color:#9cc8ff;border-color:#1c3d66}
+.tag.vio{background:#251a40;color:#cdb4ff;border-color:#3d2c66}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.count{color:var(--muted);font-size:12px}
+/* drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100vw);background:var(--panel);border-left:1px solid var(--border2);box-shadow:-20px 0 60px rgba(0,0,0,.5);transform:translateX(105%);transition:transform .18s ease;z-index:20;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.drawer header h2{margin:0;font-size:16px}
+.drawer .body{padding:16px 18px;overflow:auto;flex:1}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:12.5px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
+.sect{margin:18px 0 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+/* feed */
+.feed{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:10px;background:#0c1018;max-height:calc(100vh - 230px);overflow:auto}
+.ev{display:grid;grid-template-columns:72px 110px 1fr;gap:10px;padding:4px 12px;border-bottom:1px solid #151b27}
+.ev:hover{background:var(--hover)}
+.ev .k{white-space:nowrap}
+.ev.high{background:rgba(248,81,73,.08)}.ev.warn{background:rgba(227,179,65,.06)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:3px 10px;border-radius:14px;border:1px solid var(--border2);background:var(--panel2);cursor:pointer;font-size:12px;color:var(--muted);user-select:none}
+.chip.on{background:#14324a;border-color:#1e6a96;color:#dff3ff}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.subtabs a{padding:8px 14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
+.subtabs a.on{color:var(--text);border-color:var(--accent)}
+.check{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}
+.check .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px}
+.check .ic.ok{background:#11331b;color:var(--ok)}.check .ic.warn{background:#3d3010;color:var(--warn)}.check .ic.bad{background:#4a1716;color:var(--bad)}.check .ic.info{background:#0f2440;color:var(--info)}
+.check b{font-weight:600}
+.check p{margin:3px 0 0;color:var(--muted);font-size:12.5px;word-break:break-word}
+.check .fix{color:var(--dim);font-size:12px;margin-top:3px}
+.score{font-size:42px;font-weight:700;letter-spacing:-1px}
+.fwi{display:flex;align-items:center;gap:8px;padding:3px 0;flex-wrap:wrap}
+.fwi .mono{flex:1;min-width:200px;word-break:break-all}
+details.fwf{padding:7px 0;border-top:1px solid var(--border)}
+details.fwf summary{cursor:pointer;list-style:none}
+details.fwf summary::-webkit-details-marker{display:none}
+details.fwf summary::before{content:"▸ ";color:var(--muted)}
+details.fwf[open] summary::before{content:"▾ "}
+.mdl-ov{position:fixed;inset:0;background:rgba(5,8,14,.62);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:70;animation:mdlf .12s ease-out}
+@keyframes mdlf{from{opacity:0}to{opacity:1}}
+.mdl{width:min(470px,92vw);background:var(--panel);border:1px solid var(--border2);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:18px 20px 16px;animation:mdlp .14s ease-out}
+@keyframes mdlp{from{transform:translateY(6px) scale(.985);opacity:.6}to{transform:none;opacity:1}}
+.mdl h3{margin:0 0 8px;font-size:15px}
+.mdl.danger h3{color:var(--bad)}
+.mdl-b{color:var(--text);line-height:1.5;word-break:break-word}
+.mdl-b .mono{font-size:12px;color:var(--muted)}
+.mdl-ch{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.mdl-ch .chip{padding:5px 13px;font-size:13px}
+.mdl-ch .chip.on{background:#152234;border-color:var(--accent);color:var(--text)}
+.mdl-in{width:100%;box-sizing:border-box;margin-top:12px}
+.mdl-lb{display:block;margin-top:12px;color:var(--muted);font-size:12px}
+.mdl-lb .mdl-in{margin-top:4px;color:var(--text)}
+.mdl-a{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.mdl-a button{padding:6px 16px}
+.mdl-a .danger{background:#4a1716;border-color:#7a2624;color:#ffb4ae}
+.mdl-a .primary{background:#12304a;border-color:var(--accent);color:#d7efff}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1b2433;border:1px solid var(--border2);padding:9px 16px;border-radius:8px;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.5);display:none;max-width:80vw}
+.toast.on{display:block}.toast.err{border-color:#7a2624;background:#2d1312}
+.banner{background:#2a2310;border:1px solid #58461a;color:#f2d68a;border-radius:9px;padding:9px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+.prog{height:4px;background:#1c2433;border-radius:2px;overflow:hidden;margin:8px 0}
+.prog i{display:block;height:100%;width:30%;background:var(--accent);animation:sl 1.1s infinite ease-in-out}
+@keyframes sl{0%{margin-left:-30%}100%{margin-left:100%}}
+.pcard{display:grid;gap:4px}
+.pcard .row{display:flex;justify-content:space-between;font-size:12.5px}
+.banner.info{background:#0f2440;border-color:#1c3d66;color:#b9d8ff}
+/* komut paleti */
+.pal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:grid;place-items:start center;padding-top:12vh;backdrop-filter:blur(2px)}
+.palbox{width:min(640px,92vw);background:var(--panel);border:1px solid var(--border2);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.palbox input{width:100%;border:0;border-bottom:1px solid var(--border);border-radius:0;padding:15px 18px;font-size:15px;background:transparent}
+#palres{max-height:52vh;overflow:auto;padding:6px}
+.pi{display:flex;gap:10px;padding:8px 12px;border-radius:7px;cursor:pointer;align-items:baseline}
+.pi.sel{background:var(--hover);box-shadow:inset 2px 0 0 var(--accent)}
+.pi .s{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pi .k{margin-left:auto;color:var(--dim);font-size:11.5px;white-space:nowrap;padding-left:10px}
+.palhint{padding:7px 14px;border-top:1px solid var(--border);color:var(--dim);font-size:11.5px;display:flex;gap:14px}
+kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:0 5px}
+/* bağlantı haritası */
+#flowmap svg{width:100%;height:auto;display:block}
+#flowmap .ed{fill:none;stroke:var(--accent);opacity:.32;transition:opacity .12s}
+#flowmap .ed.hi{opacity:.95;stroke:var(--warn)}#flowmap .ed.lo{opacity:.06}
+#flowmap text{font-size:12px;fill:var(--text)}#flowmap .cnt{fill:var(--dim);font-size:11px}
+#flowmap .nd{cursor:default}#flowmap .nd circle{fill:var(--accent)}
+/* disk haritası */
+#treemap{border-radius:8px;cursor:pointer}
+/* açık tema */
+[data-theme=light]{--bg:#f3f5f9;--panel:#fff;--panel2:#f0f3f8;--hover:#e7ecf5;--border:#dde3ee;--border2:#c9d2e2;--text:#1c2433;--muted:#5b667b;--dim:#8a94a8;--accent:#0a78c2;--ok:#1a8f3a;--warn:#a86f00;--bad:#d1242f;--info:#0969da;--violet:#7c4dd6}
+[data-theme=light] input,[data-theme=light] select{background:#fff}
+[data-theme=light] button:hover{border-color:#a9b6cc}
+[data-theme=light] button.primary{background:#d6ebfb;border-color:#8fc4ec;color:#0b3a63}
+[data-theme=light] button.danger{background:#fde4e2;border-color:#f0a9a4;color:#8f1a16}
+[data-theme=light] .top{background:rgba(243,245,249,.92)}
+[data-theme=light] th{background:#eef2f8}
+[data-theme=light] td{border-bottom-color:#e6ebf3}
+[data-theme=light] nav a.on{background:#e3effb;color:#0b3a63}
+[data-theme=light] .core,[data-theme=light] .feed{background:#f6f8fc}
+[data-theme=light] .core span{text-shadow:none;color:var(--text)}
+[data-theme=light] .ev{border-bottom-color:#e6ebf3}
+[data-theme=light] .bar,[data-theme=light] .prog{background:#e3e8f1}
+[data-theme=light] .tag{background:#eef1f7;border-color:#d6dce8}
+[data-theme=light] .tag.bad{background:#ffe3e1;color:#a4161a;border-color:#f3b8b4}
+[data-theme=light] .tag.warn{background:#fff1cc;color:#8a5a00;border-color:#ecd68a}
+[data-theme=light] .tag.ok{background:#dcf5e3;color:#14702e;border-color:#a9dcb8}
+[data-theme=light] .tag.info{background:#dcecff;color:#0a4a9e;border-color:#a9c9f2}
+[data-theme=light] .tag.vio{background:#ece3ff;color:#5a32b5;border-color:#cdb9f5}
+[data-theme=light] .badge.bad{background:#ffe3e1;color:#a4161a}[data-theme=light] .badge.warn{background:#fff1cc;color:#8a5a00}[data-theme=light] .badge.ok{background:#dcf5e3;color:#14702e}
+[data-theme=light] .check .ic.ok{background:#dcf5e3}[data-theme=light] .check .ic.warn{background:#fff1cc}[data-theme=light] .check .ic.bad{background:#ffe3e1}[data-theme=light] .check .ic.info{background:#dcecff}
+[data-theme=light] .banner{background:#fff6dc;border-color:#ecd68a;color:#7a5a00}
+[data-theme=light] .banner.info{background:#e4f0ff;border-color:#a9c9f2;color:#0a4a9e}
+[data-theme=light] .toast{background:#fff}[data-theme=light] .toast.err{background:#ffe9e7}
+[data-theme=light] .chip.on{background:#d6ebfb;border-color:#8fc4ec;color:#0b3a63}
+[data-theme=light] .drawer{box-shadow:-20px 0 60px rgba(30,40,70,.18)}
+[data-theme=light] ::-webkit-scrollbar-thumb{background:#c4ccdb}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#273042;border-radius:6px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"> <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b6fa0"/><stop offset="1" stop-color="#4cc2ff"/></linearGradient></defs> <path d="M32 3 L57 11.5 V30 C57 46 46 56 32 61 C18 56 7 46 7 30 V11.5 Z" fill="url(#g)"/> <path d="M13 31 Q32 12 51 31 Q32 50 13 31 Z" fill="#eaf6ff"/> <circle cx="32" cy="31" r="9" fill="#0b3556"/> <circle cx="32" cy="31" r="4" fill="#04121c"/> <circle cx="35" cy="28" r="1.6" fill="#fff"/> </svg></div><div><b>Gözcü</b><small id="hostname">…</small></div></div>
+    <nav id="nav"></nav>
+    <div class="sidefoot">
+      <div class="priv"><span class="dot" id="privdot"></span><span id="privtxt">…</span></div>
+      <button id="elevate" class="sm" style="display:none">Yönetici olarak yeniden başlat</button>
+      <button id="autostart" class="sm" title="Windows oturumu açılınca Gözcü'yü arka planda başlat">⏻ Açılışta başlat: …</button>
+      <button id="quitbtn" class="sm" title="Gözcü'yü tamamen kapat (arka planda çalışıyorsa buradan kapatılır)">Gözcü'yü kapat</button>
+      <div id="uptime"></div>
+    </div>
+  </aside>
+  <main id="main">
+    <div class="top">
+      <div><h1 id="ptitle">Genel Bakış</h1><div class="sub" id="psub"></div></div>
+      <div class="right">
+        <span class="sub" id="clock"></span>
+        <button id="netcut" class="sm" title="Tüm internet erişimini kes / geri aç (yerel ağ etkilenmez). Yönetici gerekir.">⛔ İnterneti kes</button>
+        <button id="palbtn" class="sm" title="Komut paleti: sayfa, işlem, eylem ara">⌕ <kbd>Ctrl K</kbd></button>
+        <button id="tgbtn" class="sm" title="Uyarıları Telegram'a gönder">✈ Telegram</button>
+        <button id="bell" class="sm" title="Uyarı bildirimleri">Bildirim ○</button>
+        <button id="theme" class="sm" title="Açık / koyu tema">◐</button>
+        <button id="pause" class="sm" title="Canlı güncellemeyi durdur">⏸ Duraklat</button>
+      </div>
+    </div>
+
+    <!-- GENEL BAKIŞ -->
+    <section class="page" id="p-overview">
+      <div class="grid kpis" id="kpis"></div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>Akıllı içgörüler <span class="r muted">kural tabanlı analiz</span></h3><div id="insights" class="list"></div></div>
+        <div class="card"><h3>Uygulamalar (gruplu) <span class="r muted">aynı programın tüm işlemleri toplamı</span></h3><div id="groups" class="list"></div></div>
+      </div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>İşlemci ve bellek <span class="r muted" id="cpuinfo"></span></h3><canvas class="chart" id="ch-cpu"></canvas>
+          <div class="legend"><span><i style="background:var(--accent)"></i>CPU %</span><span><i style="background:var(--violet)"></i>Bellek %</span></div></div>
+        <div class="card"><h3>Ağ trafiği <span class="r muted" id="nettot"></span></h3><canvas class="chart" id="ch-net"></canvas>
+          <div class="legend"><span><i style="background:var(--ok)"></i>İndirme</span><span><i style="background:var(--warn)"></i>Yükleme</span></div></div>
+      </div>
+      <div class="grid three" style="margin-top:14px">
+        <div class="card"><h3>En çok CPU kullanan</h3><div class="list" id="topcpu"></div></div>
+        <div class="card"><h3>En çok bellek kullanan</h3><div class="list" id="topmem"></div></div>
+        <div class="card"><h3>En çok disk G/Ç yapan</h3><div class="list" id="topio"></div></div>
+      </div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>Son uyarılar <span class="r"><a href="#feed">tümü →</a></span></h3><div id="ovalerts" class="list"></div></div>
+        <div class="card"><h3>Çekirdekler</h3><div class="cores" id="cores"></div>
+          <h3 style="margin-top:16px">Diskler</h3><div id="ovdisks" class="grid" style="gap:10px"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>Sistem</h3><dl class="kv" id="sysinfo"></dl></div>
+    </section>
+
+    <!-- İŞLEMLER -->
+    <section class="page" id="p-procs">
+      <div class="toolbar">
+        <input type="search" id="procq" placeholder="Ad, PID, yol veya kullanıcı ara…">
+        <label class="chk"><input type="checkbox" id="procnet"> Sadece ağ kullananlar</label>
+        <label class="chk"><input type="checkbox" id="procsus"> Sadece şüpheliler</label>
+        <label class="chk"><input type="checkbox" id="procuser"> Sadece benim işlemlerim</label>
+        <label class="chk" title="İşlemleri üst-alt ilişkisine göre göster"><input type="checkbox" id="proctreechk"> Ağaç görünümü</label>
+        <span class="grow"></span><span class="count" id="proccount"></span>
+      </div>
+      <div class="tw" id="proctable"></div>
+    </section>
+
+    <!-- BAĞLANTILAR -->
+    <section class="page" id="p-conns">
+      <div class="grid kpis" id="connkpis" style="margin-bottom:14px"></div>
+      <div class="toolbar">
+        <input type="search" id="connq" placeholder="İşlem, IP, host, port ara…">
+        <select id="conndir"><option value="">Tüm yönler</option><option value="out">Giden</option><option value="in">Gelen</option><option value="listen">Dinleyen</option></select>
+        <select id="connst"><option value="">Tüm durumlar</option><option>ESTABLISHED</option><option>TIME_WAIT</option><option>CLOSE_WAIT</option><option>SYN_SENT</option><option>LISTEN</option><option>BOUND</option></select>
+        <select id="conncls"><option value="">Tüm adresler</option><option value="public">İnternet</option><option value="private">Yerel ağ</option><option value="loopback">Loopback</option></select>
+        <label class="chk"><input type="checkbox" id="connnolo" checked> Loopback'i gizle</label>
+        <label class="chk" title="Şüpheli uzak port, internetten gelen bağlantı, riskli dinleyen port veya şüpheli/taklit işlem etiketi taşıyan bağlantılar"><input type="checkbox" id="connflag"> Sadece riskli / şüpheli olanlar</label>
+        <span class="grow"></span><span class="count" id="conncount"></span>
+      </div>
+      <div class="tw" id="conntable"></div>
+    </section>
+
+    <!-- PORTLAR -->
+    <section class="page" id="p-ports">
+      <div class="grid kpis" id="portkpis" style="margin-bottom:14px"></div>
+      <div class="toolbar">
+        <input type="search" id="portq" placeholder="Port, servis, işlem ara…">
+        <label class="chk"><input type="checkbox" id="portexp" checked> Sadece dış ağa açık olanlar</label>
+        <label class="chk"><input type="checkbox" id="porttcp"> Sadece TCP</label>
+        <span class="grow"></span><span class="count" id="portcount"></span>
+      </div>
+      <div class="tw" id="porttable"></div>
+      <p class="muted" style="font-size:12px;margin-top:10px">“Dış ağa açık” = 0.0.0.0 / :: veya bir ağ arayüzü adresinde dinliyor (yalnızca 127.0.0.1 değil). “Güvenlik duvarı” sütunu, gelen trafik kurallarına göre yaklaşık bir değerlendirmedir. Risk seviyesi portun bilinen saldırı geçmişine dayanır.</p>
+    </section>
+
+    <!-- CANLI AKIŞ -->
+    <section class="page" id="p-feed">
+      <div class="subtabs" id="feedtabs"><a data-t="ev" class="on">Olaylar ve uyarılar</a><a data-t="fw">Güvenlik duvarı logu</a><a data-t="etw">Ağ trafiği (işlem bazlı)</a><a data-t="hist">Trafik geçmişi</a><a data-t="dns">DNS sorguları</a></div>
+      <div id="feed-ev">
+        <div class="toolbar">
+          <div class="chips" id="evchips"></div>
+          <input type="search" id="evq" placeholder="Olaylarda ara…">
+          <span class="grow"></span><span class="count" id="evcount"></span>
+          <button class="sm" id="evclear">Ekranı temizle</button>
+        </div>
+        <div class="feed" id="feed"></div>
+      </div>
+      <div id="feed-fw" style="display:none">
+        <div id="fwlogbanner"></div>
+        <div class="toolbar">
+          <div class="chips" id="fwchips"></div>
+          <input type="search" id="fwq" placeholder="IP, port, işlem ara…">
+          <span class="grow"></span><span class="count" id="fwcount"></span>
+        </div>
+        <div class="tw" id="fwlogtable"></div>
+      </div>
+      <div id="feed-dns" style="display:none">
+        <div id="dnsbanner"></div>
+        <div class="toolbar">
+          <input type="search" id="dnsq" placeholder="Alan adı, işlem, IP ara…">
+          <label class="chk"><input type="checkbox" id="dnsfail"> Sadece başarısız</label>
+          <label class="chk"><input type="checkbox" id="dnsqonly"> Sorguları da göster</label>
+          <label class="chk" title="Gözcü'nün IP adreslerini adlara çevirmek için yaptığı ters DNS sorgularını gizle"><input type="checkbox" id="dnsself" checked> Gözcü'yü gizle</label>
+          <span class="grow"></span><span class="count" id="dnscount"></span>
+        </div>
+        <div class="tw" id="dnstable"></div>
+        <p class="muted" style="font-size:12px;margin-top:8px">Kaynak: Windows DNS-Client ETW kaydı; hangi işlem hangi alan adını çözdü. Çözülen adlar, bağlantı tablolarında IP'nin yanında da görünür. Tarayıcı içi DNS-over-HTTPS bu kayıtta görünmez.</p>
+      </div>
+      <div id="feed-hist" style="display:none">
+        <div id="histbanner"></div>
+        <div class="toolbar">
+          <select id="histdays"><option value="1">Bugün</option><option value="7" selected>Son 7 gün</option><option value="30">Son 30 gün</option></select>
+          <input type="search" id="histq" placeholder="İşlem ara…">
+          <span class="grow"></span><span class="count" id="histcount"></span>
+        </div>
+        <h3 style="margin:12px 0 6px">Günlük toplam</h3>
+        <div class="tw short" id="histdaystbl"></div>
+        <h3 style="margin:14px 0 6px">İşlem başına <span class="muted" style="font-weight:400;font-size:12px">loopback hariç</span></h3>
+        <div class="tw" id="histprocs"></div>
+        <p class="muted" style="font-size:12px;margin-top:8px">Veriler <span class="mono">nettraffic.json</span> dosyasında tutulur (60 gün). Panel kapalıyken geçen trafik sayılmaz.</p>
+      </div>
+      <div id="feed-etw" style="display:none">
+        <div id="etwbanner"></div>
+        <div class="toolbar">
+          <input type="search" id="etwq" placeholder="İşlem, IP, port ara…">
+          <label class="chk"><input type="checkbox" id="etwlo"> Loopback'i göster</label>
+          <span class="grow"></span><span class="count" id="etwcount"></span>
+        </div>
+        <div id="etwblockedcc" style="margin-top:8px"></div>
+        <h3 style="margin:12px 0 6px">İşlem başına trafik</h3>
+        <div class="tw short" id="etwprocs"></div>
+        <h3 style="margin:14px 0 6px">Bağlantı başına trafik <span class="muted" style="font-weight:400;font-size:12px">kim kiminle ne kadar veri alıp verdi</span></h3>
+        <div class="tw" id="etwflows"></div>
+        <h3 style="margin:14px 0 6px">Son aktarımlar <span class="muted" style="font-weight:400;font-size:12px">tek tek gönderme/alma olayları</span></h3>
+        <div class="tw" id="etwrows"></div>
+        <p class="muted" style="font-size:12px;margin-top:8px">Kaynak: Windows ETW (Microsoft-Windows-Kernel-Network). Her satır bir gönderme/alma çağrısıdır (tek bir ağ paketi değil); yalnızca üst veri görünür, içerik okunmaz. Panel açıldığı andan itibaren sayılır. Ülke/kuruluş: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a> (CC BY 4.0). Cloudflare gibi anycast ağlarda ülke gerçek sunucu konumunu göstermeyebilir.</p>
+      </div>
+    </section>
+
+    <!-- GÜVENLİK DUVARI -->
+    <section class="page" id="p-fw">
+      <div id="fwbanner"></div>
+      <div class="grid three" id="fwprofiles"></div>
+      <div class="card" id="fwhealth" style="margin-top:14px"><h3>Kural sağlığı</h3><div class="muted">Analiz ediliyor…</div></div>
+      <div class="card" style="margin-top:14px"><h3>Yedekler <span class="r muted" id="fwbkinfo"></span></h3><div id="fwbackups"></div></div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>Hızlı engelleme</h3>
+          <div class="toolbar" style="margin:0">
+            <select id="blkkind"><option value="ip">IP / ağ</option><option value="program">Program (.exe yolu)</option><option value="port">Yerel port</option></select>
+            <input id="blkval" placeholder="ör. 203.0.113.5 veya 10.0.0.0/8" style="flex:1;min-width:200px">
+            <select id="blkdir"><option value="out">Giden</option><option value="in">Gelen</option><option value="both">Her ikisi</option></select>
+            <button class="danger" id="blkgo">Engelle</button>
+          </div>
+          <div class="muted" style="font-size:12px;margin-top:8px">Kurallar güvenlik duvarında “SysDash” grubuyla oluşturulur (Gözcü'nün eski adı; mevcut kurallar bozulmasın diye korundu) ve aşağıdan tek tıkla silinebilir. Yönetici yetkisi gerekir.</div>
+        </div>
+        <div class="card"><h3>Gözcü kuralları</h3><div id="sdrules" class="list"></div></div>
+      </div>
+      <div class="toolbar" style="margin-top:16px">
+        <input type="search" id="ruleq" placeholder="Kural adı, program, port ara…">
+        <select id="ruledir"><option value="">Gelen + giden</option><option value="in">Gelen</option><option value="out">Giden</option></select>
+        <select id="ruleact"><option value="">İzin + engel</option><option value="allow">İzin ver</option><option value="block">Engelle</option></select>
+        <label class="chk"><input type="checkbox" id="ruleen" checked> Sadece etkin</label>
+        <label class="chk"><input type="checkbox" id="ruleopen"> Sadece herkese açık gelen izinler</label>
+        <span class="grow"></span><span class="count" id="rulecount"></span>
+        <button class="sm" id="rulereload">Yenile</button>
+      </div>
+      <div class="tw" id="ruletable"></div>
+    </section>
+
+    <!-- AĞ -->
+    <section class="page" id="p-net">
+      <div class="grid" id="nics" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))"></div>
+      <div class="card" style="margin-top:14px"><h3>Bağlantı haritası <span class="r muted">işlemler → internet adresleri · üzerine gelince izle</span></h3><div id="flowmap"></div></div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>En çok bağlanılan internet adresleri</h3><div class="tw short" id="topremote"></div></div>
+        <div class="card"><h3>Bağlantı sayısına göre işlemler</h3><div class="list" id="byproc"></div></div>
+      </div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card"><h3>Yerel ağdaki cihazlar (ARP) <span class="r muted" id="nbcount"></span></h3><div class="tw short" id="neighbors"></div></div>
+        <div class="card"><h3>DNS sunucuları ve ağ profilleri</h3><div id="dns"></div></div>
+      </div>
+    </section>
+
+    <!-- BAŞLANGIÇ -->
+    <section class="page" id="p-startup">
+      <div class="subtabs" id="sttabs"><a data-t="st" class="on">Başlangıç öğeleri</a><a data-t="tk">Zamanlanmış görevler</a><a data-t="sv">Servisler</a></div>
+      <div class="toolbar">
+        <input type="search" id="stq" placeholder="Ara…">
+        <label class="chk" id="stmsl"><input type="checkbox" id="stms"> Microsoft öğelerini de göster</label>
+        <label class="chk" id="strunl"><input type="checkbox" id="strun"> Sadece çalışanlar</label>
+        <span class="grow"></span><span class="count" id="stcount"></span>
+        <button class="sm" id="streload">Yenile</button>
+      </div>
+      <div class="tw" id="sttable"></div>
+    </section>
+
+    <!-- DİSK -->
+    <section class="page" id="p-disk">
+      <div class="grid" id="disks" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
+      <div class="card" style="margin-top:14px"><h3>Temizlik önerileri <span class="r"><button class="sm" id="cleanreload">Yeniden hesapla</button></span></h3>
+        <div id="cleanlist"><div class="muted">Hesaplanıyor…</div></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">Yalnızca bilinen geçici/önbellek klasörleri listelenir; “Temizle” <b>1 günden eski</b> dosyaları siler (kullanımdaki dosyalar atlanır). Kişisel dosyalarınıza dokunulmaz.</div></div>
+      <div class="card" style="margin-top:14px">
+        <h3>Büyük dosya taraması</h3>
+        <div class="toolbar" style="margin:0">
+          <input id="scanpath" list="scanpaths" placeholder="Klasör yolu" style="flex:1;min-width:260px">
+          <datalist id="scanpaths"></datalist>
+          <label class="muted">En az <input id="scanmin" type="number" value="100" min="1" style="width:80px"> MB</label>
+          <button class="primary" id="scango">Taramayı başlat</button>
+          <button id="scancancel" style="display:none">İptal</button>
+          <button id="scanup" title="Üst klasörü tara">↑ Üst klasör</button>
+        </div>
+        <div id="scanstatus" class="muted" style="margin-top:10px;font-size:12.5px"></div>
+      </div>
+      <div class="grid two" style="margin-top:14px" id="scanres" hidden>
+        <div class="card"><h3>Klasörlere göre boyut</h3><div id="scanchildren" class="list"></div></div>
+        <div class="card"><h3>Dosya türüne göre boyut</h3><div id="scanexts" class="list"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px" id="treecard" hidden><h3>Disk haritası <span class="r muted">kareye tıklayarak o klasöre inin</span></h3><canvas id="treemap" style="width:100%;height:340px;display:block"></canvas></div>
+      <div style="margin-top:14px" id="scanfiles"></div>
+    </section>
+
+    <!-- GÜVENLİK KONTROLÜ -->
+    <section class="page" id="p-sec">
+      <div class="grid" style="grid-template-columns:260px 1fr;align-items:start">
+        <div class="card" style="text-align:center"><h3 style="justify-content:center">Güvenlik durumu</h3><div class="score" id="secscore">–</div><div class="muted" id="secsum"></div>
+          <button class="sm" id="secreload" style="margin-top:12px">Yeniden kontrol et</button></div>
+        <div class="grid" id="checks" style="gap:8px"></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>Değişiklik tespiti <span class="r"><button class="sm primary" id="bsave">Şimdiki durumu referans al</button></span></h3><div id="basel" class="muted"></div></div>
+    </section>
+  </main>
+</div>
+
+<div class="drawer" id="drawer"><header><h2 id="dtitle"></h2><span class="grow" style="flex:1"></span><button class="sm" id="dclose">Kapat ✕</button></header><div class="body" id="dbody"></div></div>
+<div class="toast" id="toast"></div>
+<div class="pal" id="pal" hidden><div class="palbox"><input id="palq" placeholder="Sayfa, işlem (ad / PID / yol) veya eylem ara…" autocomplete="off" spellcheck="false"><div id="palres"></div>
+  <div class="palhint"><span><kbd>↑</kbd> <kbd>↓</kbd> gezin</span><span><kbd>Enter</kbd> seç</span><span><kbd>Esc</kbd> kapat</span><span style="margin-left:auto"><kbd>/</kbd> sayfada ara · <kbd>Alt</kbd>+<kbd>1-0</kbd> sayfalar</span></div></div></div>
+
+<script>
+let TOKEN = "__SYSDASH_TOKEN__";
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api = async p => { const r = await fetch(p); return r.json(); };
+const post = async (p, b, retry=true) => {
+  const r = await fetch(p, {method:"POST", headers:{"Content-Type":"application/json","X-Token":TOKEN}, body:JSON.stringify(b||{})});
+  if(r.status===403 && retry){ TOKEN = (await api("/api/token")).token; return post(p, b, false); } // sunucu yeniden başladıysa
+  try { return await r.json(); } catch(e){ return {ok:false, error:"Sunucu hatası ("+r.status+")"}; }
+};
+function bytes(n){ if(n==null||isNaN(n)) return "–"; const u=["B","KB","MB","GB","TB"]; let i=0; n=+n; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(n<10?2:n<100?1:0):Math.round(n))+" "+u[i]; }
+const rate = n => bytes(n)+"/s";
+const pct = n => (n==null?"–":(+n).toFixed(1)+"%");
+function dur(s){ s=Math.max(0,Math.floor(s)); const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}g ${h}s`:h?`${h}s ${m}dk`:m?`${m}dk`:`${s}sn`; }
+const tm = t => new Date(t*1000).toLocaleTimeString("tr-TR");
+const dt = t => new Date(t*1000).toLocaleString("tr-TR");
+function toast(msg, err){ const t=$("#toast"); t.textContent=msg; t.className="toast on"+(err?" err":""); clearTimeout(t._h); t._h=setTimeout(()=>t.className="toast",4000); }
+
+/* ---------- uygulama içi diyaloglar (tarayıcının confirm/prompt kutuları yerine) ---------- */
+let _mdlOpen=false;
+function uiAsk(o){ return new Promise(res=>{
+  const prev=document.activeElement; _mdlOpen=true;
+  const ov=document.createElement("div"); ov.className="mdl-ov";
+  const choices=o.choices||null; let choice=o.choice;
+  const body=esc(o.text||"").replace(/\n/g,"<br>");
+  ov.innerHTML=`<div class="mdl${o.danger?" danger":""}" role="dialog" aria-modal="true" aria-label="${esc(o.title||"Onay")}">
+    <h3>${esc(o.title||"Onay")}</h3><div class="mdl-b">${body}</div>
+    ${choices?`<div class="mdl-ch">${choices.map((c,i)=>`<button type="button" class="chip${c.value===choice?" on":""}" data-i="${i}">${esc(c.label)}</button>`).join("")}</div>`:""}
+    ${o.input?`<input class="mdl-in" type="${o.input.type||"text"}" value="${esc(o.input.value??"")}" placeholder="${esc(o.input.placeholder||"")}">`:""}
+    ${(o.inputs||[]).map(i=>`<label class="mdl-lb">${esc(i.label||"")}<input class="mdl-in" data-k="${esc(i.key)}" type="${i.type||"text"}" value="${esc(i.value??"")}" placeholder="${esc(i.placeholder||"")}" autocomplete="off" spellcheck="false"></label>`).join("")}
+    <div class="mdl-a"><button type="button" class="mdl-c">${esc(o.cancel||"İptal")}</button><button type="button" class="mdl-ok ${o.danger?"danger":"primary"}">${esc(o.ok||"Tamam")}</button></div></div>`;
+  document.body.appendChild(ov);
+  const inp=ov.querySelector(".mdl-in");
+  const done=v=>{ document.removeEventListener("keydown",key,true); ov.remove(); _mdlOpen=false; try{ prev&&prev.focus&&prev.focus(); }catch(e){} res(v); };
+  const ok=()=>{ if(o.inputs){ const r={choice}; ov.querySelectorAll(".mdl-in").forEach(x=>r[x.dataset.k]=x.value); return done(r); }
+    done(choices?choice:inp?inp.value:true); };
+  function key(e){ if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); done(null); }
+    else if(e.key==="Enter" && !(e.target.closest&&e.target.closest(".mdl-c"))){ e.preventDefault(); e.stopPropagation(); ok(); }
+    else if(e.key==="Tab"){ const f=[...ov.querySelectorAll("button,input")]; const i=f.indexOf(document.activeElement); e.preventDefault();
+      f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus(); } }
+  document.addEventListener("keydown",key,true);
+  ov.addEventListener("mousedown",e=>{ if(e.target===ov) done(null); });
+  ov.querySelector(".mdl-c").onclick=()=>done(null); ov.querySelector(".mdl-ok").onclick=ok;
+  ov.querySelectorAll(".mdl-ch .chip").forEach(b=>b.onclick=()=>{ choice=choices[+b.dataset.i].value; ov.querySelectorAll(".mdl-ch .chip").forEach(x=>x.classList.toggle("on",x===b)); });
+  (inp||ov.querySelector(".mdl-ok")).focus(); if(inp) inp.select();
+}); }
+const uiConfirm=(text,o={})=>{ const danger=o.danger??/sonlandır|silin|engel|kesil|geri alınamaz|üzerine yazılır/i.test(text);
+  return uiAsk({title:o.title||(danger?"Emin misiniz?":"Onay"),text,danger,ok:o.ok||(danger?"Evet, devam et":"Onayla")}).then(v=>!!v); };
+let PAUSED=false, OV=null, ADMIN=false;
+const lsGet = (k,d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function applyTheme(t){ document.documentElement.dataset.theme = t; $("#theme").textContent = t==="light" ? "☾" : "☀"; }
+function toggleTheme(){ const t = document.documentElement.dataset.theme==="light" ? "dark" : "light"; lsSet("sysdash.theme",t); applyTheme(t);
+  if(OV&&CUR==="overview") renderOverview(OV); if(LASTSCAN) drawTree(); }
+applyTheme(lsGet("sysdash.theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+$("#theme").onclick = toggleTheme;
+$("#netcut").onclick = async()=>{
+  if(OV&&OV.netcut){ const r=await post("/api/netcut",{enable:false}); r.ok?(toast("İnternet yeniden açıldı"),OV.netcut=false,paintNetcut()):toast(r.error,1); return; }
+  const n=await uiAsk({title:"İnterneti kes",danger:true,ok:"İnterneti kes",
+    text:`Tüm internet erişimi kesilecek. Yerel ağ ve bu panel çalışmaya devam eder.
+
+Dikkat: tarayıcı ve Claude dahil tüm uygulamaların internetini etkiler.
+Ne kadar süre sonra otomatik geri açılsın?`,
+    choices:[{label:"5 dk",value:5},{label:"15 dk",value:15},{label:"1 saat",value:60},{label:"Ben açana kadar",value:0}],choice:15});
+  if(n===null) return;
+  const r=await post("/api/netcut",{enable:true,minutes:n}); r.ok?(toast("İnternet kesildi"),OV&&(OV.netcut=true,OV.netcut_until=n?OV.now+n*60:0),paintNetcut()):toast(r.error,1);
+};
+let AUTOSTART=null;
+async function loadAutostart(){ const r=await api("/api/autostart"); AUTOSTART=r.on; const b=$("#autostart"); if(b) b.innerHTML = r.on ? '<span class="ok">●</span> Açılışta başlat: Açık' : "⏻ Açılışta başlat: Kapalı"; }
+$("#autostart").onclick = async()=>{
+  if(!ADMIN){ toast("Bunun için Gözcü'nün yönetici modunda çalışması gerekir (start-admin.bat)",1); return; }
+  const on=!AUTOSTART;
+  const ok = await uiConfirm(on ? "Windows'ta oturum açtığınızda Gözcü arka planda, yönetici yetkisiyle otomatik başlasın mı?\n\nZamanlanmış görev oluşturulur (görev adı: Gozcu); her açılışta UAC sorulmaz. Pencere açılmaz, panele tarayıcıdan http://127.0.0.1:8799 adresiyle girersiniz. Panel açıkken tamamen kapatmak için sol alttaki “Gözcü'yü kapat” düğmesini kullanın."
+      : "Açılışta otomatik başlatma kapatılsın mı? Zamanlanmış görev silinir.", {danger:false,title:on?"Açılışta başlat":"Otomatik başlatmayı kapat",ok:on?"Aç":"Kapat"});
+  if(!ok) return; const r=await post("/api/autostart",{enable:on}); r.ok?(toast(on?"Açılışta başlatma açıldı":"Açılışta başlatma kapatıldı"),loadAutostart()):toast(r.error,1); };
+$("#quitbtn").onclick = async()=>{ if(!await uiConfirm("Gözcü tamamen kapatılsın mı? İzleme, uyarılar ve Telegram bildirimleri durur.",{title:"Gözcü'yü kapat",ok:"Kapat",danger:true})) return;
+  await post("/api/quit",{}); $("#clock").innerHTML='<span class="bad">Gözcü kapatıldı</span>'; toast("Gözcü kapatıldı"); };
+loadAutostart();
+let TG=null;
+async function loadTg(){ TG=await api("/api/notify"); const b=$("#tgbtn"); if(!b) return;
+  b.innerHTML = TG.enabled ? `<span class="ok">●</span> Telegram` : "✈ Telegram";
+  b.title = TG.enabled ? `Telegram bildirimi açık (${TG.min==="warn"?"orta ve yüksek":"yalnızca yüksek"} öncelik)` : "Uyarıları Telegram'a gönder"; }
+$("#tgbtn").onclick = async()=>{
+  if(!TG) await loadTg();
+  const v = await uiAsk({title:"Telegram bildirimleri",ok:TG.configured?"Kaydet ve test et":"Kaydet ve test et",
+    text:`Uyarılar kendi Telegram botunuza gönderilir.\n1) Telegram'da @BotFather ile /newbot yazıp bir bot oluşturun ve token'ı aşağı yapıştırın.\n2) Botunuza bir mesaj (örn. /start) yazın. Chat ID boşsa otomatik bulunur.\n\nToken bu bilgisayarda yalnızca sizin Windows hesabınızın çözebileceği şekilde şifreli saklanır. Mesajlarda işlem adı, IP ve dosya yolu bulunabilir.`+(TG.configured?`\n\nŞu an ${TG.enabled?"AÇIK":"KAPALI"}${TG.bot?` · bot: @${TG.bot}`:""} · sohbet: ${TG.chat}`:""),
+    inputs:[{key:"token",label:TG.has_token?"Bot token (boş bırakırsanız kayıtlı olan kullanılır)":"Bot token",type:"password",placeholder:"123456:ABC-DEF…"},
+            {key:"chat",label:"Chat ID (isteğe bağlı)",value:"",placeholder:TG.chat?`kayıtlı: ${TG.chat}`:"boş = otomatik bul"}],
+    choices:[{label:"Sadece yüksek öncelik",value:"high"},{label:"Orta ve yüksek",value:"warn"},{label:"Kapalı",value:"off"}],choice:TG.enabled?TG.min:(TG.configured?"off":"high")});
+  if(v===null) return;
+  if(!TG.has_token && v.choice!=="off" && !String(v.token||"").trim()){ toast("Token gerekli",1); return; }
+  const r=await post("/api/notify/save",{token:v.token,chat:v.chat,min:v.choice});
+  if(!r.ok){ toast(r.error||"Kaydedilemedi",1); loadTg(); return; }
+  if(v.choice==="off"){ toast("Telegram bildirimleri kapatıldı"); loadTg(); return; }
+  const t=await post("/api/notify/test",{}); t.ok?toast("Kaydedildi — test mesajı gönderildi, Telegram'ı kontrol edin"):toast("Kaydedildi ama test mesajı gitmedi: "+t.error,1); loadTg();
+};
+loadTg();
+function paintNetcut(){ const b=$("#netcut"); if(!b||!OV) return;
+  b.className="sm"+(OV.netcut?" danger":"");
+  b.textContent = OV.netcut ? "⚠ İNTERNET KESİK — geri aç"+(OV.netcut_until?` (${dur(OV.netcut_until-OV.now)})`:"") : "⛔ İnterneti kes"; }
+
+/* ---------- ikonlar ve navigasyon ---------- */
+const IC = {
+  overview:'<path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/>',
+  procs:'<path d="M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4z" opacity=".9"/>',
+  conns:'<path d="M5 12h14M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2"/>',
+  ports:'<path d="M7 2h10v6h3v14H4V8h3zm2 2v4h6V4zM8 13v5h2v-5zm3 0v5h2v-5zm3 0v5h2v-5z"/>',
+  feed:'<path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  fw:'<path d="M12 2l8 3v6c0 5-3.5 9.7-8 11-4.5-1.3-8-6-8-11V5z"/>',
+  net:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  startup:'<path d="M8 5v14l11-7z"/>',
+  disk:'<path d="M4 4h16v16H4zm3 11a2 2 0 104 0 2 2 0 00-4 0zm0-8v2h10V7z"/>',
+  sec:'<path d="M12 2l8 3v6c0 5-3.5 9.7-8 11-4.5-1.3-8-6-8-11V5zm-1 13l6-6-1.4-1.4L11 12.2 8.4 9.6 7 11z"/>',
+};
+const PAGES = [
+  ["overview","Genel Bakış","Sistemin anlık özeti"],
+  ["procs","İşlemler","Çalışan programlar, imza durumu ve kaynak kullanımı"],
+  ["conns","Ağ Bağlantıları","Gelen / giden tüm TCP ve UDP bağlantıları"],
+  ["ports","Açık Portlar","Dinleyen portlar ve risk değerlendirmesi"],
+  ["feed","Canlı Akış","Yeni işlemler, bağlantılar, portlar ve güvenlik duvarı logu"],
+  ["fw","Güvenlik Duvarı","Profiller, kurallar ve engelleme"],
+  ["net","Ağ","Arayüzler, yerel ağ cihazları, DNS"],
+  ["startup","Başlangıç & Servisler","Otomatik çalışan her şey"],
+  ["disk","Disk & Büyük Dosyalar","Disk doluluğu ve yer kaplayan dosyalar"],
+  ["sec","Güvenlik Kontrolü","Temel güvenlik ayarlarının denetimi"],
+];
+$("#nav").innerHTML = PAGES.map(([id,t])=>`<a href="#${id}" data-p="${id}"><svg viewBox="0 0 24 24" fill="currentColor">${IC[id]}</svg><span>${t}</span><span class="badge" id="b-${id}" style="display:none"></span></a>`).join("");
+let CUR="overview";
+function route(){ const id=(location.hash||"#overview").slice(1); CUR=PAGES.find(p=>p[0]===id)?id:"overview";
+  $$("nav a").forEach(a=>a.classList.toggle("on",a.dataset.p===CUR)); $$(".page").forEach(p=>p.classList.toggle("on",p.id==="p-"+CUR));
+  const pg=PAGES.find(p=>p[0]===CUR); $("#ptitle").textContent=pg[1]; $("#psub").textContent=pg[2]; $("#main").scrollTop=0; refreshPage(true); }
+window.addEventListener("hashchange", route);
+function setBadge(id, n, cls){ const b=$("#b-"+id); if(!b) return; b.style.display=n?"":"none"; b.textContent=n; b.className="badge "+(cls||""); }
+
+/* ---------- tablo bileşeni ---------- */
+const TS = {};
+function table(el, id, cols, rows, opts={}){
+  const st = TS[id] || (TS[id] = {k: opts.sort||cols[0].k, d: opts.desc!==false});
+  const col = cols.find(c=>c.k===st.k) || cols[0];
+  const sv = col.s || (r=>r[col.k]);
+  rows = rows.slice().sort((a,b)=>{ let x=sv(a), y=sv(b); if(x==null) x=""; if(y==null) y="";
+    const r = (typeof x==="number"&&typeof y==="number") ? x-y : String(x).localeCompare(String(y),"tr",{numeric:true}); return st.d?-r:r; });
+  const max = opts.max||1500, shown = rows.slice(0,max);
+  el._rows = shown; el._click = opts.click; el._cols = cols; el._all = rows; el._tid = id;
+  const tb = el.previousElementSibling;
+  if(tb && tb.classList.contains("toolbar") && !tb.querySelector(".csvbtn")){ const b=document.createElement("button"); b.className="sm csvbtn"; b.textContent="⬇ CSV";
+    b.title="Tablodaki (filtrelenmiş) kayıtları Excel uyumlu CSV olarak indir"; b.onclick=()=>exportCsv(el); tb.appendChild(b); }
+  if(!rows.length){ el.innerHTML = `<div class="empty">${opts.empty||"Kayıt yok"}</div>`; return rows.length; }
+  const sc = el.scrollTop;
+  el.innerHTML = `<table><thead><tr>${cols.map(c=>`<th data-k="${c.k}" class="${c.num?"num ":""}${c.k===st.k?"sorted"+(st.d?"":" asc"):""}" ${c.w?`style="width:${c.w}"`:""}>${c.l}</th>`).join("")}</tr></thead><tbody>${
+    shown.map((r,i)=>`<tr data-i="${i}" class="${opts.click?"click":""}">${cols.map(c=>`<td class="${c.num?"num":""} ${c.cls||""}" ${c.t?`title="${esc(c.t(r))}"`:""}>${c.f?c.f(r):esc(r[c.k])}</td>`).join("")}</tr>`).join("")
+  }</tbody></table>${rows.length>max?`<div class="empty">İlk ${max} kayıt gösteriliyor (${rows.length} toplam). Filtreyi daraltın.</div>`:""}`;
+  el.scrollTop = sc;
+  if(!el._bound){ el._bound=true;
+    el.addEventListener("click", e=>{
+      const th = e.target.closest("th"); if(th){ const s=TS[id]; if(s.k===th.dataset.k) s.d=!s.d; else {s.k=th.dataset.k; s.d=true;} refreshPage(); return; }
+      if(e.target.closest("button,a,input")) return;
+      const tr = e.target.closest("tr[data-i]"); if(tr && el._click) el._click(el._rows[+tr.dataset.i]);
+    });
+  }
+  return rows.length;
+}
+
+function exportCsv(el){
+  const cols = (el._cols||[]).filter(c=>!c.k.startsWith("_")||c.k==="_ord"), rows = el._all||[];
+  if(!rows.length){ toast("Dışa aktarılacak kayıt yok",1); return; }
+  const cell = (c,r)=>{ let v = c.v ? c.v(r) : r[c.k]; if(v==null&&c.s) v=c.s(r); if(v==null) v="";
+    if(Array.isArray(v)) v=v.join(" "); else if(typeof v==="boolean") v=v?"Evet":"Hayır";
+    else if(typeof v==="number"&&(c.k==="created"||c.k==="mtime")&&v>1e9) v=new Date(v*1000).toLocaleString("tr-TR");
+    return '"'+String(v).replace(/"/g,'""')+'"'; };
+  const csv = "﻿"+[cols.map(c=>'"'+c.l.replace(/"/g,'""')+'"').join(";"), ...rows.map(r=>cols.map(c=>cell(c,r)).join(";"))].join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download = `sysdash-${el._tid}-${new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")}.csv`; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); toast(`${rows.length} kayıt CSV olarak indirildi`);
+}
+
+/* ---------- grafik ---------- */
+function line(cv, series, o={}){
+  const dpr=devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; if(!w) return;
+  if(cv.width!==w*dpr||cv.height!==h*dpr){cv.width=w*dpr;cv.height=h*dpr}
+  const x=cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const pad = o.axis ? {l:52,r:6,t:8,b:4} : {l:0,r:0,t:2,b:0};
+  const iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
+  let max = o.max || Math.max(1, ...series.flatMap(s=>s.d)) * 1.15;
+  if(o.axis){ x.font="11px Segoe UI"; x.fillStyle=cssv("--dim"); x.strokeStyle=cssv("--border"); x.lineWidth=1;
+    for(let i=0;i<=4;i++){ const y=pad.t+ih*i/4; x.beginPath(); x.moveTo(pad.l,y+.5); x.lineTo(w-pad.r,y+.5); x.stroke(); x.fillText(o.fmt(max*(1-i/4)),4,y+4); } }
+  const n = o.n || Math.max(...series.map(s=>s.d.length));
+  for(const s of series){ const d=s.d; if(d.length<2) continue;
+    const px=i=>pad.l+iw*(i+(n-d.length))/(n-1), py=v=>pad.t+ih*(1-Math.min(v,max)/max);
+    x.beginPath(); d.forEach((v,i)=>i?x.lineTo(px(i),py(v)):x.moveTo(px(i),py(v)));
+    x.strokeStyle=s.c; x.lineWidth=1.6; x.lineJoin="round"; x.stroke();
+    x.lineTo(px(d.length-1),pad.t+ih); x.lineTo(px(0),pad.t+ih); x.closePath();
+    const g=x.createLinearGradient(0,pad.t,0,pad.t+ih); g.addColorStop(0,s.c+"44"); g.addColorStop(1,s.c+"00"); x.fillStyle=g; x.fill(); }
+}
+
+/* ---------- ortak işaretler ---------- */
+const FLAGTXT = { susp_path:["bad","Şüpheli klasör"], masquerade:["bad","Sistem işlemi taklidi"], sus_rport:["bad","Şüpheli uzak port"],
+  inbound_public:["warn","İnternetten gelen"], risky_listen:["warn","Riskli port"] };
+const flags = arr => (arr||[]).map(f=>FLAGTXT[f]?`<span class="tag ${FLAGTXT[f][0]}">${FLAGTXT[f][1]}</span>`:"").join("");
+function sigTag(s){ if(!s) return '<span class="dim">–</span>'; if(s==="?") return '<span class="dim">kontrol…</span>';
+  if(s==="Valid") return '<span class="tag ok">İmzalı</span>'; if(s==="NotSigned") return '<span class="tag warn">İmzasız</span>';
+  if(s==="HashMismatch") return '<span class="tag bad">Bozuk imza</span>'; if(s==="NotTrusted") return '<span class="tag bad">Güvenilmeyen</span>'; return `<span class="tag">${esc(s)}</span>`; }
+const _rn = (()=>{ try{ return new Intl.DisplayNames(["tr"],{type:"region"}); }catch(e){ return null; } })();
+const ccName = cc => { if(!cc) return ""; try{ return (_rn&&_rn.of(cc))||cc; }catch(e){ return cc; } };
+const geoCell = x => x.cc ? `<span title="${esc(ccName(x.cc))}"><b class="mono">${esc(x.cc)}</b> <span class="muted">${esc(ccName(x.cc))}</span></span>` : "";
+const orgCell = x => x.org ? `<span title="AS${x.asn}">${esc(x.org)}</span>` : "";
+const DIR = {out:'<span class="tag info">↗ Giden</span>', in:'<span class="tag vio">↙ Gelen</span>', listen:'<span class="tag">◉ Dinliyor</span>'};
+const CLS = {public:'<span class="tag warn">İnternet</span>', private:'<span class="tag ok">Yerel ağ</span>', loopback:'<span class="tag">Loopback</span>', linklocal:'<span class="tag">Link-local</span>', multicast:'<span class="tag">Multicast</span>', any:'<span class="tag">Tümü</span>'};
+const RISK = {high:'<span class="tag bad">Yüksek</span>', medium:'<span class="tag warn">Orta</span>', low:'<span class="tag info">Düşük</span>', none:'<span class="tag ok">Yok</span>'};
+const addr = (ip,p) => ip ? (ip.includes(":")?`[${ip}]`:ip)+":"+p : "";
+
+/* ================= GENEL BAKIŞ ================= */
+const KPI = [
+  ["cpu","İşlemci","procs"],["mem","Bellek","procs"],["down","İndirme","net"],["up","Yükleme","net"],
+  ["disk","Disk G/Ç","disk"],["procs","İşlemler","procs"],["est","Aktif bağlantı","conns"],["listen","Dinleyen port","ports"],["alerts","Uyarılar","feed"],
+];
+$("#kpis").innerHTML = KPI.map(([k,l,go])=>`<div class="card kpi click" data-go="${go}"><div class="l">${l}</div><div class="v" id="k-${k}">–</div><div class="s" id="ks-${k}">&nbsp;</div>${["cpu","mem","down","up","disk"].includes(k)?`<canvas id="kc-${k}"></canvas>`:""}</div>`).join("");
+$("#kpis").addEventListener("click",e=>{const c=e.target.closest("[data-go]"); if(c) location.hash=c.dataset.go;});
+function plist(el, arr, val, bar){ const mx=Math.max(1,...arr.map(bar)); el.innerHTML = arr.map(p=>`<div class="li click" data-pid="${p.pid}" style="cursor:pointer"><div><div class="n">${esc(p.name)} <span class="dim mono">${p.pid}</span></div><div class="bar" style="margin-top:3px"><i style="width:${(bar(p)/mx*100).toFixed(1)}%"></i></div></div><div class="mono">${val(p)}</div></div>`).join(""); }
+$("#insights").addEventListener("click",e=>{ const r=e.target.closest("[data-go]"); if(r) location.hash=r.dataset.go; });
+["#topcpu","#topmem","#topio"].forEach(s=>$(s).addEventListener("click",e=>{const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid);}));
+function alertRow(a){ return `<div class="li"><div class="n" title="${esc(a.msg)}"><span class="dot ${a.level==="high"?"bad":"warn"}"></span>&nbsp; ${esc(a.msg)}</div><div class="dim mono">${tm(a.t)}</div></div>`; }
+function renderOverview(o){
+  const h=o.hist;
+  $("#k-cpu").textContent=pct(o.cpu); $("#ks-cpu").textContent=`${o.ncpu} mantıksal çekirdek${o.freq?` · ${(o.freq/1000).toFixed(2)} GHz`:""}`;
+  $("#k-mem").textContent=pct(o.vm.percent); $("#ks-mem").textContent=`${bytes(o.vm.used)} / ${bytes(o.vm.total)}`;
+  $("#k-down").textContent=rate(o.down); $("#ks-down").textContent="Toplam "+bytes(o.net_total.recv);
+  $("#k-up").textContent=rate(o.up); $("#ks-up").textContent="Toplam "+bytes(o.net_total.sent);
+  $("#k-disk").textContent=rate(o.dread+o.dwrite); $("#ks-disk").textContent=`Okuma ${rate(o.dread)} · Yazma ${rate(o.dwrite)}`;
+  const c=o.counts;
+  $("#k-procs").textContent=c.procs; $("#ks-procs").innerHTML=`${c.threads} iş parçacığı`+(c.unsigned?` · <span class="warn">${c.unsigned} imzasız</span>`:"");
+  $("#k-est").textContent=c.est; $("#ks-est").textContent=`${c.remote_hosts} farklı internet adresi`;
+  $("#k-listen").textContent=c.listen_tcp+c.listen_udp; $("#ks-listen").innerHTML=`TCP ${c.listen_tcp} · UDP ${c.listen_udp}`+(c.risky?` · <span class="bad">${c.risky} riskli</span>`:"");
+  $("#k-alerts").textContent=c.alerts; $("#k-alerts").className="v "+(c.alerts_high?"bad":c.alerts?"warn":"ok"); $("#ks-alerts").textContent=c.alerts_high?`${c.alerts_high} yüksek öncelikli`:(c.alerts?"incelemeye değer":"her şey sakin");
+  line($("#kc-cpu"),[{d:h.cpu,c:"#4cc2ff"}],{max:100,n:60}); line($("#kc-mem"),[{d:h.mem,c:"#b48cff"}],{max:100,n:60});
+  line($("#kc-down"),[{d:h.down,c:"#3fb950"}],{n:60}); line($("#kc-up"),[{d:h.up,c:"#e3b341"}],{n:60});
+  line($("#kc-disk"),[{d:h.dread.map((v,i)=>v+h.dwrite[i]),c:"#58a6ff"}],{n:60});
+  [["kc-cpu",-60],["kc-mem",-60],["kc-down",-60],["kc-up",-60]];
+  line($("#ch-cpu"),[{d:h.cpu,c:"#4cc2ff"},{d:h.mem,c:"#b48cff"}],{max:100,axis:true,fmt:v=>v.toFixed(0)+"%",n:180});
+  line($("#ch-net"),[{d:h.down,c:"#3fb950"},{d:h.up,c:"#e3b341"}],{axis:true,fmt:v=>rate(v),n:180});
+  $("#cpuinfo").textContent=o.cpu_name||""; $("#nettot").textContent=`↓ ${rate(o.down)}  ↑ ${rate(o.up)}`;
+  $("#insights").innerHTML = (o.insights||[]).map(i=>`<div class="li" ${i.go?`data-go="${i.go}" style="cursor:pointer"`:""}><div style="white-space:normal"><span class="dot ${i.l==="bad"?"bad":i.l==="warn"?"warn":i.l==="ok"?"ok":"info"}"></span>&nbsp; ${esc(i.t)}</div>${i.go?'<span class="dim">→</span>':"<span></span>"}</div>`).join("");
+  const gmx=Math.max(1,...(o.groups||[]).map(g=>g.mem));
+  $("#groups").innerHTML = (o.groups||[]).map(g=>`<div class="li"><div><div class="n"><b>${esc(g.name)}</b> ${g.n>1?`<span class="dim">× ${g.n}</span>`:""} <span class="dim">· CPU ${g.cpu.toFixed(1)}%</span></div><div class="bar" style="margin-top:3px"><i style="width:${(g.mem/gmx*100).toFixed(1)}%"></i></div></div><div class="mono">${bytes(g.mem)}</div></div>`).join("");
+  plist($("#topcpu"),o.top_cpu,p=>pct(p.cpu),p=>p.cpu);
+  plist($("#topmem"),o.top_mem,p=>bytes(p.mem),p=>p.mem);
+  plist($("#topio"),o.top_io,p=>rate(p.io),p=>p.io);
+  $("#ovalerts").innerHTML = o.alerts.length ? o.alerts.map(alertRow).join("") : '<div class="empty">Uyarı yok. Panel açık kaldıkça yeni portlar, şüpheli bağlantılar ve imzasız programlar burada görünür.</div>';
+  $("#cores").innerHTML = o.percpu.map((v,i)=>`<div class="core" title="Çekirdek ${i}: ${v}%"><i style="height:${v}%"></i><span>${Math.round(v)}</span></div>`).join("");
+  $("#ovdisks").innerHTML = o.disks.map(d=>`<div><div class="pcard"><div class="row"><b>${esc(d.mount)}</b><span class="muted">${bytes(d.free)} boş / ${bytes(d.total)}</span></div><div class="bar"><i style="width:${d.pct}%;background:${d.pct>90?"var(--bad)":d.pct>75?"var(--warn)":"var(--accent)"}"></i></div></div></div>`).join("");
+  const kv=[["Bilgisayar",o.host],["Kullanıcı",o.user],["İşletim sistemi",o.os],["İşlemci",`${o.cpu_name} (${o.ncpu_phys} fiziksel / ${o.ncpu} mantıksal)`],
+    ["Açılış",`${dt(o.boot)} (${dur(o.now-o.boot)} önce)`],["Takas (swap)",`${bytes(o.swap.used)} / ${bytes(o.swap.total)}`],
+    ["Pil",o.battery?`%${o.battery.pct} ${o.battery.plugged?"(şarjda)":"(pilde)"}`:"–"],["Panel yetkisi",o.admin?"Yönetici":"Standart kullanıcı"]];
+  $("#sysinfo").innerHTML = kv.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+}
+
+/* ================= İŞLEMLER ================= */
+let PROCS=[];
+function renderProcs(){
+  const q=$("#procq").value.toLowerCase(), net=$("#procnet").checked, sus=$("#procsus").checked, me=$("#procuser").checked;
+  const user=(OV&&OV.user||"").toLowerCase();
+  const rows = PROCS.filter(p=>(!q||(p.name+" "+p.pid+" "+p.exe+" "+p.user).toLowerCase().includes(q))
+    && (!net||p.conns||p.listen.length) && (!sus||p.flags.length||p.risk>=25||["NotSigned","HashMismatch","NotTrusted"].includes(p.sig)) && (!me||p.user.toLowerCase()===user));
+  const tree = $("#proctreechk").checked;
+  if(tree) procTree(PROCS);
+  const nameCol = tree
+    ? {k:"_ord",l:"Ad (ağaç)",s:p=>p._ord,v:p=>p.name,f:p=>`<span class="dim" style="display:inline-block;width:${p._depth*16}px"></span>${p._depth?'<span class="dim">└ </span>':""}<b>${esc(p.name)}</b> ${p._kids?`<span class="dim">(${p._kids})</span> `:""}${flags(p.flags)}`}
+    : {k:"name",l:"Ad",f:p=>`<b>${esc(p.name)}</b> ${flags(p.flags)}`};
+  const n = table($("#proctable"),tree?"proctree":"procs",[
+    nameCol,
+    {k:"risk",l:"Risk",num:1,f:p=>p.risk?`<span class="tag ${p.risk>=50?"bad":p.risk>=25?"warn":"info"}">${p.risk}</span>`:'<span class="dim">–</span>',t:p=>p.why||""},
+    {k:"pid",l:"PID",num:1},
+    {k:"user",l:"Kullanıcı",f:p=>p.user?esc(p.user):'<span class="dim">sistem</span>'},
+    {k:"cpu",l:"CPU",num:1,f:p=>`<span class="${p.cpu>50?"bad":p.cpu>15?"warn":""}">${p.cpu.toFixed(1)}%</span>`},
+    {k:"mem",l:"Bellek",num:1,f:p=>bytes(p.mem)},
+    {k:"io",l:"Disk G/Ç",num:1,f:p=>p.io?rate(p.io):'<span class="dim">–</span>'},
+    {k:"threads",l:"İş p.",num:1},
+    {k:"conns",l:"Bağlantı",num:1,f:p=>p.conns||'<span class="dim">–</span>'},
+    {k:"listen",l:"Dinlediği portlar",s:p=>p.listen.length,f:p=>esc(p.listen.slice(0,6).join(" "))+(p.listen.length>6?" …":"")},
+    {k:"sig",l:"İmza",f:p=>sigTag(p.sig),t:p=>p.signer||""},
+    {k:"created",l:"Başlangıç",f:p=>p.created?`<span class="muted">${dt(p.created)}</span>`:""},
+    {k:"exe",l:"Yol",f:p=>`<span class="mono muted">${esc(p.exe)}</span>`,t:p=>p.exe},
+  ], rows, tree ? {sort:"_ord", desc:false, click:p=>openProc(p.pid)} : {sort:"cpu", click:p=>openProc(p.pid)});
+  $("#proccount").textContent=`${n} / ${PROCS.length} işlem`;
+}
+function procTree(all){
+  const byPid=new Map(all.map(p=>[p.pid,p])), kids=new Map(), roots=[];
+  all.forEach(p=>{ p._ord=undefined; });
+  for(const p of all){ const par=byPid.get(p.ppid);
+    if(par && par!==p && par.created<=p.created+1){ if(!kids.has(par.pid)) kids.set(par.pid,[]); kids.get(par.pid).push(p); } else roots.push(p); }
+  let ord=0;
+  const walk=(p,d)=>{ if(p._ord!==undefined) return; p._ord=ord++; p._depth=d; const ks=(kids.get(p.pid)||[]).sort((a,b)=>a.created-b.created); p._kids=ks.length; ks.forEach(k=>walk(k,d+1)); };
+  roots.sort((a,b)=>a.name.localeCompare(b.name)).forEach(r=>walk(r,0));
+  all.forEach(p=>walk(p,0));
+}
+["#procq","#procnet","#procsus","#procuser","#proctreechk"].forEach(s=>$(s).addEventListener("input",renderProcs));
+
+async function openProc(pid, evT){
+  $("#drawer").classList.add("on"); $("#dtitle").textContent="PID "+pid; $("#dbody").innerHTML='<div class="prog"><i></i></div>';
+  const d = await api("/api/process?pid="+pid);
+  if(d.error){ $("#dbody").innerHTML=`<div class="empty">${esc(d.error)}</div>`; return; }
+  $("#dtitle").innerHTML = `${esc(d.name)} <span class="muted mono" style="font-size:13px">PID ${pid}</span>`;
+  const sig = d.sig ? `${sigTag(d.sig.s)} ${esc(d.sig.n||"")}` : '<span class="dim">–</span>';
+  const kv = [["Yol",`<span class="mono">${esc(d.exe||"(erişim yok)")}</span>`],["Komut satırı",`<span class="mono">${esc(d.cmdline||"–")}</span>`],
+    ["Çalışma klasörü",`<span class="mono">${esc(d.cwd||"–")}</span>`],["Kullanıcı",esc(d.username||"–")],["İmza",sig],
+    ["SHA-256",`<span class="mono" style="font-size:11px">${esc(d.sha256||"–")}</span>`],
+    ["Başlangıç",d.created?dt(d.created):"–"],["CPU / Bellek",`${pct(d.cpu)} · ${bytes(d.mem)}`+(d.meminfo&&d.meminfo.private?` (özel ${bytes(d.meminfo.private)})`:"")],
+    ["İş parçacığı / handle",`${d.threads} / ${d.handles}`],["Servis",d.svc&&d.svc.length?esc(d.svc.join(", ")):"–"],
+    ["Durum",d.status==="stopped"?'<span class="tag warn">Askıda</span>':esc(d.status||"–")],
+    ["İşaretler",flags(d.flags)||"–"]];
+  const par = d.parents.length ? d.parents.map(p=>`<a href="javascript:openProc(${p.pid})">${esc(p.name)} (${p.pid})</a>`).join(" ← ") : "–";
+  const ch = d.children.length ? d.children.map(p=>`<a href="javascript:openProc(${p.pid})">${esc(p.name)} (${p.pid})</a>`).join(", ") : "–";
+  const conns = d.connections.length ? `<div class="tw short"><table><tr><th>Yön</th><th>Prot.</th><th>Yerel</th><th>Uzak</th><th>Durum</th></tr>${d.connections.map(c=>`<tr><td>${DIR[c.dir]||""}</td><td>${c.proto}</td><td class="mono">${esc(addr(c.lip,c.lport))}</td><td class="mono" title="${esc(c.host||"")}">${esc(addr(c.rip,c.rport))} <span class="muted">${esc(c.host||"")}</span></td><td>${esc(c.status)}</td></tr>`).join("")}</table></div>` : '<div class="muted">Ağ bağlantısı yok.</div>';
+  const vt = d.sha256 && d.sha256.length===64 ? `<a class="sm" href="https://www.virustotal.com/gui/file/${d.sha256}" target="_blank" rel="noopener"><button class="sm">VirusTotal'de hash'i ara ↗</button></a>` : "";
+  const riskBox = `<div class="check" style="margin-bottom:14px"><div class="ic ${d.risk>=50?"bad":d.risk>=25?"warn":"ok"}">${d.risk>=50?"✕":d.risk>=25?"!":"✓"}</div><div><b>Risk skoru: ${d.risk||0} / 100</b>
+    <p>${d.risk_why&&d.risk_why.length?d.risk_why.map(esc).join("<br>"):"Şüpheli bir işaret bulunmadı."}</p>
+    ${d.about?`<div class="fix" style="margin-top:6px;color:var(--muted)"><b>Bu ne?</b> ${esc(d.about)}</div>`:'<div class="fix">Bilinen işlem sözlüğünde yok — yol, imza ve komut satırına bakarak değerlendirin.</div>'}</div></div>`;
+  $("#dbody").innerHTML = riskBox + `<dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    <div class="sect">Üst işlem zinciri</div><div>${par}</div>
+    <div class="sect">Alt işlemler</div><div>${ch}</div>
+    <div class="sect">Ağ hızı (son 5 dk) <span class="muted" id="pnetleg" style="font-weight:400"></span></div><canvas class="chart" id="pnetch" style="height:110px;width:100%"></canvas>
+    <div class="sect">Zaman çizelgesi <span class="muted" id="ptlrange" style="font-weight:400"></span></div><div id="ptl" style="max-height:280px;overflow:auto"><div class="prog"><i></i></div></div>
+    <div class="sect">Ağ bağlantıları</div>${conns}
+    ${d.open_files&&d.open_files.length?`<div class="sect">Açık dosyalar (${d.open_files.length})</div><div class="mono muted" style="font-size:11.5px;max-height:160px;overflow:auto">${d.open_files.map(esc).join("<br>")}</div>`:""}
+    <div class="acts">
+      <button class="danger" id="pkill">İşlemi sonlandır</button>
+      <button id="psusp">${d.status==="stopped"?"▶ Devam ettir":"⏸ Askıya al"}</button>
+      <label class="muted" style="display:inline-flex;gap:6px;align-items:center">Öncelik
+        <select id="pprio">${[["idle","Çok düşük"],["below","Normal altı"],["normal","Normal"],["above","Normal üstü"],["high","Yüksek"]].map(([k,l])=>`<option value="${k}" ${d.prio===k?"selected":""}>${l}</option>`).join("")}</select></label>
+      ${d.exe?`<button id="preveal">Klasörde göster</button><button id="pblock">İnternet erişimini engelle</button>`:""}
+      ${vt}
+    </div>`;
+  api("/api/timeline?pid="+pid+(evT?"&t="+evT:"")).then(r=>{ const el=$("#ptl"); if(!el) return;
+    $("#ptlrange").textContent = evT ? `(olay saati ±15 dk · ${tm(evT)})` : "(son 30 dk)";
+    const lab={dns:"DNS",net_out:"↗ Giden",net_in:"↙ Gelen"};
+    el.innerHTML = r.items&&r.items.length ? r.items.map(x=>{ const [l,c]=EVK[x.k]||[lab[x.k]||x.k,""];
+      const hit = evT && Math.abs(x.t-evT)<=1.5;
+      return `<div class="ev ${x.lvl}" ${hit?'style="outline:1px solid var(--warn,#e3b341)"':""}><span class="dim">${tm(x.t)}</span><span class="k"><span class="tag ${x.lvl==="high"?"bad":c}">${l}</span></span><span>${esc(x.msg)}</span></div>`; }).join("")
+      : '<div class="muted">Bu aralıkta kayıt yok (yönetici modunda ağ ve DNS kayıtları da gelir).</div>'; }).catch(()=>{ const el=$("#ptl"); if(el) el.innerHTML='<div class="muted">Zaman çizelgesi alınamadı.</div>'; });
+  api("/api/etwproc?pid="+pid).then(h=>{ const cv=$("#pnetch"); if(!cv) return;
+    if(h.status!=="ok"||!h.tx.length){ cv.style.display="none"; $("#pnetleg").textContent=h.status!=="ok"?"(izleme kapalı: "+h.status+")":"(bu işlem henüz ağ trafiği üretmedi)"; return; }
+    $("#pnetleg").innerHTML='<span style="color:#3fb950">● gelen</span> <span style="color:#e3b341">● giden</span>';
+    line(cv,[{d:h.rx,c:"#3fb950"},{d:h.tx,c:"#e3b341"}],{axis:true,fmt:v=>rate(v),n:150}); }).catch(()=>{});
+  $("#pkill").onclick = async()=>{ if(!await uiConfirm(`${d.name} (PID ${pid}) sonlandırılsın mı? Kaydedilmemiş veriler kaybolabilir.`)) return;
+    const r=await post("/api/kill",{pid}); r.ok?(toast("İşlem sonlandırıldı"),closeDrawer()):toast(r.error,1); };
+  $("#psusp").onclick = async()=>{ const resume=d.status==="stopped"; const r=await post("/api/suspend",{pid,resume});
+    r.ok ? (toast(resume?"İşlem devam ettirildi":"İşlem askıya alındı — dondurulur, 'Devam ettir' ile geri açılır"), openProc(pid)) : toast(r.error,1); };
+  $("#pprio").onchange = async e=>{ const r=await post("/api/priority",{pid,level:e.target.value}); r.ok?toast("Öncelik değiştirildi"):(toast(r.error,1),openProc(pid)); };
+  if(d.exe){ $("#preveal").onclick=()=>post("/api/reveal",{path:d.exe});
+    $("#pblock").onclick=async()=>{ if(!await uiConfirm(`${d.exe}\n\nBu programın gelen ve giden tüm ağ trafiği engellensin mi?`)) return;
+      const r=await post("/api/block",{kind:"program",value:d.exe,dir:"both"}); r.ok?toast("Güvenlik duvarı kuralı eklendi"):toast(r.error,1); }; }
+}
+window.openProc = openProc;
+function closeDrawer(){ $("#drawer").classList.remove("on"); }
+$("#dclose").onclick=closeDrawer; document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeDrawer(); });
+
+/* ================= BAĞLANTILAR ================= */
+let CONNS=[];
+async function blockIp(ip){ if(!await uiConfirm(`${ip} adresine giden ve gelen tüm trafik engellensin mi?`)) return;
+  const r=await post("/api/block",{kind:"ip",value:ip,dir:"both"}); r.ok?toast(ip+" engellendi"):toast(r.error,1); }
+window.blockIp=blockIp;
+/* Güvenilir liste: "işlem|yerel port" -> riskli_port / internetten_gelen uyarıları gizlenir (şüpheli port & işlem bayrakları gizlenmez) */
+const SOFTFLAGS=["risky_listen","inbound_public"];
+let TRUST=new Set(); try{ TRUST=new Set(JSON.parse(localStorage.getItem("sysdash.trust")||"[]")); }catch(e){}
+const tkey = c => (c.name||"").toLowerCase()+"|"+c.lport;
+const isTrusted = c => TRUST.has(tkey(c)) && c.flags.some(f=>SOFTFLAGS.includes(f));
+const effFlags = c => TRUST.has(tkey(c)) ? c.flags.filter(f=>!SOFTFLAGS.includes(f)) : c.flags;
+const nFlags = c => effFlags(c).length + c.pflags.length;
+function toggleTrust(i){ const c=CONNS[i]; if(!c) return; const k=tkey(c);
+  if(TRUST.has(k)){ TRUST.delete(k); toast(`${c.name}:${c.lport} güvenilir listesinden çıkarıldı`); }
+  else { TRUST.add(k); toast(`${c.name}:${c.lport} güvenilir olarak işaretlendi`); }
+  try{ localStorage.setItem("sysdash.trust",JSON.stringify([...TRUST])); }catch(e){}
+  renderConns(); }
+window.toggleTrust=toggleTrust;
+function renderConns(){
+  const q=$("#connq").value.toLowerCase(), dir=$("#conndir").value, st=$("#connst").value, cls=$("#conncls").value, nolo=$("#connnolo").checked, fl=$("#connflag").checked;
+  const rows = CONNS.filter(c=>(!q||(c.name+" "+c.pid+" "+c.lip+" "+c.lport+" "+c.rip+" "+c.rport+" "+(c.host||"")+" "+(c.cc||"")+" "+ccName(c.cc)+" "+(c.org||"")).toLowerCase().includes(q))
+    && (!dir||c.dir===dir) && (!st||c.status===st) && (!cls||c.rclass===cls)
+    && (!nolo||!(c.rclass==="loopback"||(c.dir==="listen"&&/^(127\.|::1)/.test(c.lip)))) && (!fl||nFlags(c)));
+  const n = table($("#conntable"),"conns",[
+    {k:"dir",l:"Yön",s:c=>({out:0,in:1,listen:2}[c.dir]??3)*10+(c.status==="ESTABLISHED"?0:1),f:c=>DIR[c.dir]||""},
+    {k:"name",l:"İşlem",f:c=>`<b>${esc(c.name)}</b> ${c.sig==="NotSigned"?sigTag("NotSigned"):""}`},
+    {k:"pid",l:"PID",num:1},
+    {k:"proto",l:"Prot."},
+    {k:"lport",l:"Yerel",f:c=>`<span class="mono">${esc(addr(c.lip,c.lport))}</span>`},
+    {k:"rip",l:"Uzak",f:c=>c.rip?`<span class="mono">${esc(addr(c.rip,c.rport))}</span>`:'<span class="dim">–</span>'},
+    {k:"host",l:"Uzak host",f:c=>c.host?esc(c.host):(c.host===null&&c.rip&&c.rclass!=="loopback"?'<span class="dim">çözülüyor…</span>':'<span class="dim">–</span>'),t:c=>c.host||""},
+    {k:"status",l:"Durum",f:c=>`<span class="${c.status==="ESTABLISHED"?"ok":c.status==="LISTEN"?"info":"muted"}">${esc(c.status)}</span>`},
+    {k:"rclass",l:"Adres türü",f:c=>CLS[c.rclass]||""},
+    {k:"cc",l:"Ülke",f:geoCell,t:c=>ccName(c.cc)},
+    {k:"org",l:"Kuruluş (ASN)",f:orgCell,t:c=>c.org?`AS${c.asn} ${c.org}`:""},
+    {k:"flags",l:"İşaretler",s:nFlags,f:c=>(isTrusted(c)?'<span class="tag ok" title="Güvenilir listesinde">Güvenilir</span>':"")+flags(effFlags(c))+flags(c.pflags)},
+    {k:"_a",l:"",f:c=>{ const i=CONNS.indexOf(c);
+      const trustBtn = isTrusted(c)||TRUST.has(tkey(c)) ? `<button class="sm" onclick="toggleTrust(${i})">Güvenme</button>`
+        : c.flags.some(f=>SOFTFLAGS.includes(f)) ? `<button class="sm" onclick="toggleTrust(${i})" title="${esc(c.name)} : ${esc(c.lport)} için riskli port / internetten gelen uyarısını gizle">Güven</button>` : "";
+      return trustBtn + (c.rip&&c.rclass==="public"?` <button class="sm" onclick="blockIp('${esc(c.rip)}')">Engelle</button>`:""); }},
+  ], rows, {sort:"dir", desc:false, click:c=>c.pid&&openProc(c.pid)});
+  $("#conncount").textContent=`${n} / ${CONNS.length} kayıt`;
+  const est=CONNS.filter(c=>c.status==="ESTABLISHED");
+  const k=[["Kurulu bağlantı",est.length],["Giden",est.filter(c=>c.dir==="out").length],["Gelen",est.filter(c=>c.dir==="in").length],
+    ["İnternet adresleri",new Set(est.filter(c=>c.rclass==="public").map(c=>c.rip)).size],["Ağ kullanan işlem",new Set(est.map(c=>c.pid)).size],
+    ["Riskli / şüpheli",CONNS.filter(nFlags).length]];
+  $("#connkpis").innerHTML=k.map(([l,v],i)=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${i===5&&v?"warn":""}">${v}</div></div>`).join("");
+}
+["#connq","#conndir","#connst","#conncls","#connnolo","#connflag"].forEach(s=>$(s).addEventListener("input",renderConns));
+
+/* ================= PORTLAR ================= */
+let PORTS=[];
+async function blockPort(port, proto){ if(!await uiConfirm(`Gelen ${proto} ${port} portu güvenlik duvarında engellensin mi? (Bu portu kullanan uygulama dışarıdan erişilemez hale gelir.)`)) return;
+  const r=await post("/api/block",{kind:"port",value:String(port),proto,dir:"in"}); r.ok?toast(`Port ${port} engellendi`):toast(r.error,1); }
+window.blockPort=blockPort;
+function renderPorts(){
+  const q=$("#portq").value.toLowerCase(), ex=$("#portexp").checked, tcp=$("#porttcp").checked;
+  const rows = PORTS.filter(p=>(!q||(p.lport+" "+p.svc_name+" "+p.name+" "+p.why).toLowerCase().includes(q)) && (!ex||p.exposed) && (!tcp||p.proto==="TCP"));
+  const RV={high:3,medium:2,low:1,none:0};
+  const FW={blocked:'<span class="tag ok">Engelli</span>',allowed:'<span class="tag warn">İzinli</span>',default:'<span class="tag">Varsayılan (engel)</span>',local:'<span class="tag">Yalnız yerel</span>'};
+  const n = table($("#porttable"),"ports",[
+    {k:"risk",l:"Risk",s:p=>RV[p.risk],f:p=>RISK[p.risk]},
+    {k:"lport",l:"Port",num:1,f:p=>`<b class="mono">${p.lport}</b>`},
+    {k:"proto",l:"Prot."},
+    {k:"lip",l:"Bağlı adres",f:p=>`<span class="mono">${esc(p.lip)}</span> ${p.scope==="any"?'<span class="tag warn">tüm arayüzler</span>':""}`},
+    {k:"svc_name",l:"Servis",f:p=>esc(p.svc_name)||'<span class="dim">–</span>'},
+    {k:"name",l:"İşlem",f:p=>`<b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> ${p.sig==="NotSigned"?sigTag("NotSigned"):""}`},
+    {k:"fw",l:"Güvenlik duvarı",f:p=>FW[p.fw]||"",t:p=>(p.fw_rules||[]).join(" | ")},
+    {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
+    {k:"why",l:"Neden önemli",f:p=>`<span class="muted">${esc(p.why)}</span>`,t:p=>p.why},
+    {k:"_a",l:"",f:p=>p.exposed?`<button class="sm" onclick="blockPort(${p.lport},'${p.proto}')">Gelenleri engelle</button>`:""},
+  ], rows, {sort:"risk", click:p=>p.pid&&openProc(p.pid)});
+  $("#portcount").textContent=`${n} / ${PORTS.length} dinleyen soket`;
+  const exp=PORTS.filter(p=>p.exposed);
+  const k=[["Dinleyen (toplam)",PORTS.length,""],["Dış ağa açık",exp.length,exp.length?"warn":"ok"],["Yüksek risk",exp.filter(p=>p.risk==="high").length,exp.some(p=>p.risk==="high")?"bad":"ok"],
+    ["Orta risk",exp.filter(p=>p.risk==="medium").length,""],["Güvenlik duvarında izinli",exp.filter(p=>p.fw==="allowed").length,""],["Yalnız yerel",PORTS.length-exp.length,""]];
+  $("#portkpis").innerHTML=k.map(([l,v,c])=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`).join("");
+}
+["#portq","#portexp","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
+
+/* ================= CANLI AKIŞ ================= */
+const EVK = {alert:["Uyarı","bad"],listen:["Port açıldı","warn"],unlisten:["Port kapandı",""],conn_out:["Giden bağ.","info"],conn_in:["Gelen bağ.","vio"],proc_start:["İşlem başladı","ok"],proc_end:["İşlem bitti",""],action:["Kullanıcı eylemi","info"],fwchange:["Güvenlik duvarı","warn"]};
+const EVON = new Set(["alert","listen","unlisten","conn_out","conn_in","proc_start","proc_end","action"]);
+let EVENTS=[], EVLAST=0, EVCUT=0;
+$("#evchips").innerHTML = Object.entries(EVK).map(([k,[l]])=>`<span class="chip on" data-k="${k}">${l} <span class="dim" id="evn-${k}"></span></span>`).join("");
+$("#evchips").addEventListener("click",e=>{const c=e.target.closest(".chip"); if(!c) return; const k=c.dataset.k; EVON.has(k)?EVON.delete(k):EVON.add(k); c.classList.toggle("on"); renderFeed();});
+$("#evq").addEventListener("input",renderFeed);
+$("#evclear").onclick=()=>{EVCUT=EVLAST; renderFeed();};
+$$("#feedtabs a").forEach(a=>a.onclick=()=>{ $$("#feedtabs a").forEach(x=>x.classList.toggle("on",x===a)); $("#feed-ev").style.display=a.dataset.t==="ev"?"":"none"; $("#feed-fw").style.display=a.dataset.t==="fw"?"":"none"; $("#feed-etw").style.display=a.dataset.t==="etw"?"":"none"; $("#feed-hist").style.display=a.dataset.t==="hist"?"":"none"; $("#feed-dns").style.display=a.dataset.t==="dns"?"":"none"; refreshPage(true); });
+/* ---------- bildirimler ---------- */
+let NOTIFY = lsGet("sysdash.notify","0")==="1" && "Notification" in window && Notification.permission==="granted", EVINIT=false;
+function updBell(){ $("#bell").textContent = NOTIFY?"Bildirim ●":"Bildirim ○"; $("#bell").title = NOTIFY?"Uyarı bildirimleri AÇIK (kapatmak için tıkla)":"Uyarı bildirimleri kapalı (açmak için tıkla)"; $("#bell").classList.toggle("primary",NOTIFY); }
+function beep(){ try{ const a=new (window.AudioContext||window.webkitAudioContext)(), o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination);
+  o.type="sine"; o.frequency.setValueAtTime(880,a.currentTime); o.frequency.setValueAtTime(660,a.currentTime+.18); g.gain.setValueAtTime(.0001,a.currentTime);
+  g.gain.exponentialRampToValueAtTime(.18,a.currentTime+.02); g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.5); o.start(); o.stop(a.currentTime+.55); }catch(e){} }
+async function toggleNotify(){
+  if(!("Notification" in window)){ toast("Bu tarayıcı bildirimleri desteklemiyor",1); return; }
+  if(!NOTIFY){ const p = Notification.permission==="granted" ? "granted" : await Notification.requestPermission();
+    if(p!=="granted"){ toast("Bildirim izni verilmedi (tarayıcı site ayarlarından açabilirsiniz)",1); return; }
+    NOTIFY=true; beep(); toast("Bildirimler açık: yeni uyarılarda masaüstü bildirimi gelir, yüksek öncelikte ses çalar"); }
+  else { NOTIFY=false; toast("Bildirimler kapatıldı"); }
+  lsSet("sysdash.notify",NOTIFY?"1":"0"); updBell(); }
+$("#bell").onclick = toggleNotify; updBell();
+function notifyNew(evs){
+  const al = evs.filter(e=>e.kind==="alert").slice(-3); if(!al.length) return;
+  const hi = al.some(e=>e.level==="high");
+  toast("⚠ "+al[al.length-1].msg, hi);
+  if(NOTIFY){ al.forEach(e=>{ try{ new Notification(e.level==="high"?"Gözcü — YÜKSEK ÖNCELİKLİ UYARI":"Gözcü uyarısı",{body:e.msg,tag:"sysdash-"+e.id,requireInteraction:e.level==="high"}); }catch(x){} }); if(hi) beep(); }
+}
+async function pollEvents(){
+  const r = await api("/api/events?since="+EVLAST);
+  if(r.events.length){ if(EVINIT) notifyNew(r.events); EVENTS.push(...r.events); if(EVENTS.length>4000) EVENTS=EVENTS.slice(-4000); EVLAST=r.last; }
+  EVINIT=true;
+  for(const k in EVK){ const el=$("#evn-"+k); if(el) el.textContent=r.stats[k]||""; }
+}
+function renderFeed(){
+  const q=$("#evq").value.toLowerCase();
+  const rows = EVENTS.filter(e=>e.id>EVCUT && EVON.has(e.kind) && (!q||e.msg.toLowerCase().includes(q))).slice(-800).reverse();
+  $("#evcount").textContent = rows.length+" olay";
+  const f=$("#feed");
+  f.innerHTML = rows.length ? rows.map(e=>{const [l,c]=EVK[e.kind]||[e.kind,""]; return `<div class="ev ${e.level}" ${e.pid?`data-pid="${e.pid}" data-t="${e.t}" style="cursor:pointer"`:""}><span class="dim">${tm(e.t)}</span><span class="k"><span class="tag ${e.level==="high"?"bad":c}">${l}</span></span><span>${esc(e.msg)}</span></div>`;}).join("")
+    : '<div class="empty">Henüz olay yok. Panel açık kaldıkça başlayan programlar, yeni bağlantılar ve açılan portlar burada akacak.</div>';
+}
+$("#feed").addEventListener("click",e=>{const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid, r.dataset.t?+r.dataset.t:undefined);});
+
+let FWLOG=[], FWLAST=0; const FWON=new Set(["ALLOW","DROP"]);
+$("#fwchips").innerHTML = `<span class="chip on" data-k="ALLOW">İzin verilen</span><span class="chip on" data-k="DROP">Engellenen</span><span class="chip on" data-k="SEND">Giden</span><span class="chip on" data-k="RECEIVE">Gelen</span><span class="chip on" data-k="HIDEMC" title="Hedefi multicast (224-239.x.x.x, ff..) veya broadcast (…255) olan paketleri gizle: SSDP, mDNS, NetBIOS duyuruları vb.">Multicast/yayını gizle</span><span class="chip on" data-k="HIDELAN" title="Kaynağı yerel ağdan (192.168.x, 10.x, 172.16-31.x, 169.254.x) olan ve hedef portu NetBIOS (137/138), SSDP (1900), mDNS (5353), LLMNR (5355) veya WS-Discovery (3702) olan engellenmiş paketleri gizle">Yerel ağ gürültüsünü gizle</span>`;
+FWON.add("SEND"); FWON.add("RECEIVE"); FWON.add("HIDEMC"); FWON.add("HIDELAN");
+const LAN_NOISE_PORTS = new Set(["137","138","1900","5353","5355","3702"]);
+const isPrivIp = ip => /^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip||"");
+const isLanNoise = r => r.action==="DROP" && isPrivIp(r.src) && LAN_NOISE_PORTS.has(String(r.dport));
+const isMulticast = r => { const d=(r.dst||"").toLowerCase();
+  if(d.includes(":")) return d.startsWith("ff");
+  const m=d.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/); if(!m) return false;
+  return (+m[1]>=224 && +m[1]<=239) || +m[4]===255; };
+$("#fwchips").addEventListener("click",e=>{const c=e.target.closest(".chip"); if(!c) return; const k=c.dataset.k; FWON.has(k)?FWON.delete(k):FWON.add(k); c.classList.toggle("on"); renderFwLog();});
+$("#fwq").addEventListener("input",renderFwLog);
+async function pollFwLog(){
+  const r = await api("/api/fwlog?since="+FWLAST);
+  if(r.rows.length){ FWLOG.push(...r.rows); if(FWLOG.length>5000) FWLOG=FWLOG.slice(-5000); FWLAST=r.last; }
+  const ok = r.status==="ok";
+  $("#fwlogbanner").innerHTML = ok ? "" : `<div class="banner">⚠ Güvenlik duvarı logu okunamıyor: ${esc(r.status)}. ${ADMIN?'Güvenlik Duvarı sekmesinden loglamayı açın.':'Paneli yönetici olarak başlatın ve loglamayı açın.'}</div>`;
+}
+function renderFwLog(){
+  const q=$("#fwq").value.toLowerCase();
+  const rows = FWLOG.filter(r=>FWON.has(r.action) && (!r.path||FWON.has(r.path)) && !(FWON.has("HIDEMC")&&isMulticast(r)) && !(FWON.has("HIDELAN")&&isLanNoise(r)) && (!q||[r.src,r.dst,r.sport,r.dport,r.name,r.proto].join(" ").toLowerCase().includes(q)));
+  const n = table($("#fwlogtable"),"fwlog",[
+    {k:"id",l:"Zaman",s:r=>r.id,f:r=>`<span class="muted">${esc(r.date)} ${esc(r.time)}</span>`},
+    {k:"action",l:"Eylem",f:r=>r.action==="DROP"?'<span class="tag bad">Engellendi</span>':'<span class="tag ok">İzin</span>'},
+    {k:"path",l:"Yön",f:r=>r.path==="SEND"?DIR.out:r.path==="RECEIVE"?DIR.in:esc(r.path||"")},
+    {k:"proto",l:"Prot."},
+    {k:"src",l:"Kaynak",f:r=>`<span class="mono">${esc(r.src)}:${esc(r.sport)}</span>`},
+    {k:"dst",l:"Hedef",f:r=>`<span class="mono">${esc(r.dst)}:${esc(r.dport)}</span>`},
+    {k:"size",l:"Boyut",num:1},
+    {k:"name",l:"İşlem",f:r=>r.name?`${esc(r.name)} <span class="dim">${esc(r.pid)}</span>`:`<span class="dim">${esc(r.pid||"–")}</span>`},
+  ], rows, {sort:"id", max:1000, empty:"Log kaydı yok", click:r=>{ const pid=+r.pid; if(pid>0) openProc(pid); }});
+  $("#fwcount").textContent = `${n} kayıt`;
+}
+
+/* ================= AĞ TRAFİĞİ (ETW) ================= */
+let ETW=null, ETWROWS=[], ETWLAST=0;
+async function pollEtw(){
+  const r = await api("/api/etw?since="+ETWLAST);
+  if(r.rows&&r.rows.length){ ETWROWS.push(...r.rows); if(ETWROWS.length>3000) ETWROWS=ETWROWS.slice(-3000); }
+  if(r.last!=null) ETWLAST=r.last;
+  ETW=r;
+  $("#etwbanner").innerHTML = r.status==="ok" ? "" : `<div class="banner">⚠ Ağ trafiği izleme çalışmıyor: ${esc(r.status)}. ${ADMIN?"":"Paneli yönetici olarak başlatın (start-admin.bat)."}</div>`;
+}
+async function blockCc(cc){ if(!await uiConfirm(`${ccName(cc)} (${cc}) ülkesine ait TÜM IP aralıkları güvenlik duvarında engellensin mi?
+
+Bu ülkedeki sitelere ve CDN/bulut sunucularına erişim kesilir; kuralların eklenmesi birkaç on saniye sürebilir. Engeli aşağıdaki listeden kaldırabilirsiniz.`)) return;
+  toast(`${cc} engelleniyor… lütfen bekleyin`); const r=await post("/api/blockcountry",{cc}); r.ok?(toast(`${cc} engellendi (${r.ranges} aralık)`),pollEtw().then(renderEtw)):toast(r.error,1); }
+async function unblockCc(cc){ const r=await post("/api/unblockcountry",{cc}); r.ok?(toast(cc+" engeli kaldırıldı"),pollEtw().then(renderEtw)):toast(r.error,1); }
+window.blockCc=blockCc; window.unblockCc=unblockCc;
+async function blockProg(exe,name){ if(!await uiConfirm(`${name}\n${exe}\n\nBu programın gelen ve giden tüm ağ trafiği engellensin mi? (Engeli aynı yerden veya Güvenlik Duvarı sekmesinden kaldırabilirsiniz.)`)) return;
+  const r=await post("/api/block",{kind:"program",value:exe,dir:"both"}); r.ok?(toast(name+" engellendi"),pollEtw().then(renderEtw)):toast(r.error,1); }
+async function unblockProg(exe){ const r=await post("/api/unblock",{value:exe}); r.ok?(toast("Engel kaldırıldı"),pollEtw().then(renderEtw)):toast(r.error,1); }
+window.blockProg=blockProg; window.unblockProg=unblockProg;
+$("#etwq").addEventListener("input",renderEtw); $("#etwlo").addEventListener("input",renderEtw);
+function renderEtw(){
+  if(!ETW) return;
+  $("#etwblockedcc").innerHTML = (ETW.blocked_cc||[]).length ? `<div class="banner" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">Engelli ülkeler: ${ETW.blocked_cc.map(c=>`<span class="tag bad">${esc(c)} ${esc(ccName(c))} <a href="javascript:unblockCc('${esc(c)}')" title="Engeli kaldır">✕</a></span>`).join(" ")}</div>` : "";
+  const q=$("#etwq").value.toLowerCase(), lo=$("#etwlo").checked;
+  const ok = x => (lo||x.rclass!=="loopback") && (!q||[x.name,x.pid,x.rip,x.rport,x.lport,x.host,x.proto,x.cc,ccName(x.cc),x.org].join(" ").toLowerCase().includes(q));
+  const ps = (ETW.procs||[]).filter(p=>(!q||(p.name+" "+p.pid).toLowerCase().includes(q)));
+  table($("#etwprocs"),"etwprocs",[
+    {k:"name",l:"İşlem",f:p=>`${esc(p.name)} <span class="dim">${p.pid}</span>`},
+    {k:"txr",l:"↗ Giden/sn",num:1,s:p=>p.txr,f:p=>rate(p.txr)},
+    {k:"rxr",l:"↙ Gelen/sn",num:1,s:p=>p.rxr,f:p=>rate(p.rxr)},
+    {k:"tx",l:"Toplam giden",num:1,s:p=>p.tx,f:p=>bytes(p.tx)},
+    {k:"rx",l:"Toplam gelen",num:1,s:p=>p.rx,f:p=>bytes(p.rx)},
+    {k:"blk",l:"İnternet",s:p=>p.blk?1:0,f:p=>!p.exe?"":p.blk
+      ? `<span class="tag bad">Engelli</span> <button class="sm" onclick="unblockProg(${JSON.stringify(p.exe).replace(/"/g,"&quot;")})">Engeli kaldır</button>`
+      : `<button class="sm" onclick="blockProg(${JSON.stringify(p.exe).replace(/"/g,"&quot;")},${JSON.stringify(p.name).replace(/"/g,"&quot;")})" title="Bu programın gelen/giden tüm internet erişimini kes">Kes</button>`},
+  ], ps, {sort:"rx",max:200,empty:"Henüz trafik yok",click:p=>{ if(p.pid>0) openProc(p.pid); }});
+  const fl = (ETW.flows||[]).filter(ok);
+  const n = table($("#etwflows"),"etwflows",[
+    {k:"name",l:"İşlem",f:x=>`${esc(x.name)} <span class="dim">${x.pid}</span>`},
+    {k:"proto",l:"Prot."},
+    {k:"rip",l:"Uzak adres",f:x=>`<span class="mono">${esc(x.rip)}:${x.rport}</span>${x.host?` <span class="dim">${esc(x.host)}</span>`:""}`},
+    {k:"rclass",l:"Tür",f:x=>CLS[x.rclass]||""},
+    {k:"cc",l:"Ülke",f:geoCell,t:x=>ccName(x.cc)},
+    {k:"org",l:"Kuruluş",f:orgCell,t:x=>x.org?`AS${x.asn} ${x.org}`:""},
+    {k:"lport",l:"Yerel port",num:1},
+    {k:"tx",l:"Giden",num:1,s:x=>x.tx,f:x=>bytes(x.tx)+` <span class="dim">(${x.txn})</span>`},
+    {k:"rx",l:"Gelen",num:1,s:x=>x.rx,f:x=>bytes(x.rx)+` <span class="dim">(${x.rxn})</span>`},
+    {k:"last",l:"Son",s:x=>x.last,f:x=>`<span class="muted">${tm(x.last)}</span>`},
+    {k:"blk",l:"",s:x=>0,f:x=>x.rclass==="public"?`<button class="sm" onclick="blockIp('${esc(x.rip)}')" title="${esc(x.rip)} adresini güvenlik duvarında engelle">IP engelle</button>`+(x.cc?` <button class="sm" onclick="blockCc('${esc(x.cc)}')" title="${esc(ccName(x.cc))} ülkesinin tüm adres aralıklarını engelle">Ülkeyi engelle</button>`:""):""},
+  ], fl, {sort:"last",max:500,empty:"Bağlantı trafiği yok",click:x=>{ if(x.pid>0) openProc(x.pid); }});
+  $("#etwcount").textContent = `${n} bağlantı · toplam ↗ ${bytes(ETW.total.tx)} ↙ ${bytes(ETW.total.rx)}`;
+  table($("#etwrows"),"etwrows",[
+    {k:"id",l:"Zaman",s:r=>r.id,f:r=>`<span class="muted">${tm(r.t)}</span>`},
+    {k:"dir",l:"Yön",f:r=>r.dir==="out"?DIR.out:DIR.in},
+    {k:"name",l:"İşlem",f:r=>`${esc(r.name)} <span class="dim">${r.pid}</span>`},
+    {k:"proto",l:"Prot."},
+    {k:"lip",l:"Yerel",f:r=>`<span class="mono">${esc(r.lip)}:${r.lport}</span>`},
+    {k:"rip",l:"Uzak",f:r=>`<span class="mono">${esc(r.rip)}:${r.rport}</span>${r.host?` <span class="dim">${esc(r.host)}</span>`:""}`},
+    {k:"size",l:"Boyut",num:1,s:r=>r.size,f:r=>bytes(r.size)},
+    {k:"blk",l:"",s:r=>0,f:r=>r.rclass==="public"?`<button class="sm" onclick="blockIp('${esc(r.rip)}')" title="${esc(r.rip)} adresini güvenlik duvarında engelle">IP engelle</button>`:""},
+  ], ETWROWS.filter(ok), {sort:"id",max:500,empty:"Aktarım yok",click:r=>{ if(r.pid>0) openProc(r.pid); }});
+}
+
+let DNSROWS=[], DNSLAST=0, DNSST="";
+async function pollDns(){
+  const r = await api("/api/etwdns?since="+DNSLAST);
+  if(r.rows&&r.rows.length){ DNSROWS.push(...r.rows); if(DNSROWS.length>4000) DNSROWS=DNSROWS.slice(-4000); }
+  if(r.last!=null) DNSLAST=r.last;
+  DNSST=r.status;
+  $("#dnsbanner").innerHTML = r.status==="ok" ? "" : `<div class="banner">⚠ DNS izleme çalışmıyor: ${esc(r.status)}. ${ADMIN?"":"Paneli yönetici olarak başlatın."}</div>`;
+}
+$("#dnsq").addEventListener("input",renderDns); $("#dnsfail").addEventListener("input",renderDns); $("#dnsqonly").addEventListener("input",renderDns); $("#dnsself").addEventListener("input",renderDns);
+const DNSERR = {9003:"Yok (NXDOMAIN)",9501:"Kayıt yok",9002:"Sunucu hatası",1460:"Zaman aşımı",9702:"Kayıt yok",
+  87:"Geçersiz istek (iç)",4312:"Bulunamadı",10051:"Ağ erişilemez",10060:"Zaman aşımı",11001:"Ana makine yok"};
+function renderDns(){
+  const q=$("#dnsq").value.toLowerCase(), fail=$("#dnsfail").checked, qo=$("#dnsqonly").checked, hs=$("#dnsself").checked;
+  const rows=DNSROWS.filter(r=>(qo||r.kind==="yanıt") && !(hs&&r.self) && (!fail||(r.status!=null&&r.status!==0&&r.status!==87)) && (!q||[r.name,r.pname,r.pid,r.results,r.qtype].join(" ").toLowerCase().includes(q)));
+  const n=table($("#dnstable"),"dnstbl",[
+    {k:"id",l:"Zaman",s:r=>r.id,f:r=>`<span class="muted">${tm(r.t)}</span>`},
+    {k:"pname",l:"İşlem",f:r=>`${esc(r.pname)} <span class="dim">${r.pid}</span>`},
+    {k:"name",l:"Alan adı",f:r=>`<span class="mono">${esc(r.name)}</span>`},
+    {k:"qtype",l:"Tür"},
+    {k:"status",l:"Sonuç",s:r=>r.status==null?-1:r.status,f:r=>r.kind==="sorgu"?'<span class="dim">sorgu</span>':r.status===0?'<span class="tag ok">Çözüldü</span>':r.status===87?'<span class="tag" title="Windows çözümleyicisinin A+AAAA birleşik aramasındaki iç kaydı; gerçek yanıt AAAA satırında görünür">İç kayıt</span>':`<span class="tag bad">${esc(DNSERR[r.status]||("Hata "+r.status))}</span>`},
+    {k:"results",l:"Yanıt",f:r=>`<span class="mono muted">${esc((r.results||"").replace(/type:\s*\d+\s*/g,"").replace(/::ffff:/g,"").slice(0,140))}</span>`},
+  ], rows, {sort:"id",max:800,empty:"Henüz DNS sorgusu görülmedi",click:r=>{ if(r.pid>0) openProc(r.pid); }});
+  $("#dnscount").textContent=`${n} kayıt`;
+}
+
+let HIST=null, HISTT=0;
+async function loadHist(){
+  const days=$("#histdays").value;
+  if(!HIST || HIST._d!==days || Date.now()-HISTT>15000){ HIST=await api("/api/etwhist?days="+days); HIST._d=days; HISTT=Date.now(); }
+  $("#histbanner").innerHTML = HIST.status==="ok" ? "" : `<div class="banner">⚠ Trafik geçmişi kullanılamıyor: ${esc(HIST.status)}. ${ADMIN?"":"Paneli yönetici olarak başlatın."}</div>`;
+  renderHist();
+}
+function renderHist(){
+  if(!HIST) return;
+  const q=$("#histq").value.toLowerCase();
+  table($("#histdaystbl"),"histdays",[
+    {k:"date",l:"Gün"},{k:"tx",l:"↗ Giden",num:1,f:d=>bytes(d.tx)},{k:"rx",l:"↙ Gelen",num:1,f:d=>bytes(d.rx)},
+  ], HIST.days||[], {sort:"date",max:60,empty:"Kayıt yok"});
+  const n=table($("#histprocs"),"histprocs",[
+    {k:"name",l:"İşlem"},{k:"tx",l:"↗ Giden",num:1,f:p=>bytes(p.tx)},{k:"rx",l:"↙ Gelen",num:1,f:p=>bytes(p.rx)},
+    {k:"tot",l:"Toplam",num:1,s:p=>p.tx+p.rx,f:p=>bytes(p.tx+p.rx)},
+  ], (HIST.procs||[]).filter(p=>!q||p.name.toLowerCase().includes(q)), {sort:"tot",max:300,empty:"Kayıt yok"});
+  $("#histcount").textContent=`${n} işlem`;
+}
+$("#histdays").addEventListener("change",()=>{ HIST=null; loadHist(); }); $("#histq").addEventListener("input",renderHist);
+
+/* ================= GÜVENLİK DUVARI ================= */
+let FWDATA=null;
+async function loadFw(force){
+  FWDATA = await api("/api/firewall"+(force?"?force=1":""));
+  const PN={Domain:"Etki alanı",Private:"Özel",Public:"Genel"};
+  const act=FWDATA.net_profiles||[];
+  $("#fwprofiles").innerHTML = (FWDATA.profiles||[]).map(p=>{ const on=p.enabled==="True"; const cat={DomainAuthenticated:"Domain",Private:"Private",Public:"Public"};
+    const active = act.filter(a=>cat[a.cat]===p.name).map(a=>a.alias+" ("+a.name+")");
+    return `<div class="card"><h3><span class="dot ${on?"ok":"bad"}"></span> ${PN[p.name]||p.name} profil ${active.length?'<span class="tag info r">AKTİF</span>':""}</h3>
+      <div class="pcard"><div class="row"><span class="muted">Durum</span><b class="${on?"ok":"bad"}">${on?"Açık":"KAPALI"}</b></div>
+      <div class="row"><span class="muted">Varsayılan gelen</span><span class="${p.inAct==="Allow"?"bad":""}">${p.inAct==="Block"||p.inAct==="NotConfigured"?"Engelle":esc(p.inAct)}</span></div>
+      <div class="row"><span class="muted">Varsayılan giden</span><span>${p.outAct==="Allow"||p.outAct==="NotConfigured"?"İzin ver":esc(p.outAct)}</span></div>
+      <div class="row"><span class="muted">Log: engellenen / izinli</span><span>${p.logBlocked==="True"?"✔":"✘"} / ${p.logAllowed==="True"?"✔":"✘"}</span></div>
+      ${active.length?`<div class="row"><span class="muted">Ağ</span><span>${esc(active.join(", "))}</span></div>`:""}</div></div>`; }).join("") || `<div class="card muted">${esc(FWDATA.err||"Profil bilgisi okunamadı")}</div>`;
+  const logOn = (FWDATA.profiles||[]).some(p=>p.logBlocked==="True"||p.logAllowed==="True");
+  $("#fwbanner").innerHTML = `<div class="banner ${logOn?"info":""}">
+    ${logOn?"✔ Güvenlik duvarı loglaması açık. Paket kayıtları Canlı Akış → Güvenlik duvarı logu sekmesinde.":"Güvenlik duvarı loglaması kapalı: engellenen bağlantılar kaydedilmiyor."}
+    <span style="flex:1"></span>${ADMIN?`<button class="sm ${logOn?"":"primary"}" id="fwlogbtn">${logOn?"Loglamayı kapat":"Loglamayı aç"}</button>`:'<span class="muted">Değiştirmek için yönetici gerekli</span>'}</div>`;
+  if($("#fwlogbtn")) $("#fwlogbtn").onclick=async()=>{ const r=await post("/api/fw/logging",{enable:!logOn}); r.ok?(toast("Güncellendi"),loadFw(true)):toast(r.error,1); };
+  const sd=(FWDATA.rules||[]).filter(r=>r.sysdash);
+  $("#sdrules").innerHTML = sd.length ? sd.map(r=>`<div class="li"><div class="n">${esc(r.name)}</div><button class="sm" data-rm="${esc(r.name)}">Sil</button></div>`).join("") : '<div class="muted">Henüz SysDash ile oluşturulmuş kural yok.</div>';
+  renderRules();
+  loadFwHealth(force); loadFwBackups();
+}
+const HL={bad:["bad","Yüksek"],warn:["warn","Orta"],info:["info","Bilgi"]};
+async function loadFwHealth(force){
+  const r=await api("/api/fwhealth"+(force?"?force=1":"")); const el=$("#fwhealth");
+  const f=r.findings||[], c=r.counts||{};
+  const head=`<h3>Kural sağlığı <span class="r muted">${r.rules||0} kural tarandı${f.length?` · ${c.bad?c.bad+" yüksek, ":""}${c.warn?c.warn+" orta, ":""}${c.info||0} bilgi`:""}</span></h3>`;
+  if(!f.length){ el.innerHTML=head+`<div class="check"><div class="ic ok">✓</div><div><b>Belirgin bir sorun bulunmadı</b><p>Geniş izinler, çakışmalar, şüpheli klasör kuralları veya kapalı profil tespit edilmedi.</p></div></div>`; return; }
+  el.innerHTML=head+f.map(x=>{ const [cls,lbl]=HL[x.level]||["info","Bilgi"];
+    return `<details class="fwf"><summary><span class="tag ${cls==="bad"?"bad":cls}">${lbl}</span> <b>${esc(x.title)}</b></summary>
+      <p class="muted" style="margin:6px 0 6px 2px">${esc(x.detail)}</p>
+      ${x.items.length?`<div style="max-height:230px;overflow:auto;margin:0 0 8px 2px">${x.items.map((t,i)=>{ const rf=(x.refs||[])[i];
+        const btns = rf && ADMIN ? ` <button class="sm" data-fwdis="${esc(rf.n)}" data-d="${rf.d}">Devre dışı bırak</button>${x.scope&&rf.d==="in"?` <button class="sm" data-fwscope="${esc(rf.n)}" data-d="${rf.d}" title="Uzak adresi yalnızca verdiğiniz aralıklarla sınırla (ör. Tailscale)">Adresi sınırla</button>`:""}` : "";
+        return `<div class="fwi"><span class="mono muted" style="font-size:11.5px">${esc(t)}</span>${btns}</div>`; }).join("")}${x.n>x.items.length?`<div class="muted" style="font-size:12px">… ve ${x.n-x.items.length} tane daha (Kurallar tablosundan yönetebilirsiniz)</div>`:""}</div>`:""}</details>`; }).join("");
+}
+async function fwRuleToggle(name,dir,enable){
+  const same = FWDATA&&FWDATA.rules ? FWDATA.rules.filter(r=>r.name===name&&r.dir===dir).length : 1;
+  const ok = await uiConfirm(`"${name}" kuralı ${enable?"etkinleştirilsin":"devre dışı bırakılsın"} mı?`+(same>1?`\n\nAynı adı ve yönü taşıyan ${same} kuralın hepsi etkilenir.`:"")+"\n\nİşlemden önce güvenlik duvarının otomatik yedeği alınır; Yedekler bölümünden geri dönebilirsiniz.",
+    {danger:!enable, title:enable?"Kuralı etkinleştir":"Kuralı devre dışı bırak", ok:enable?"Etkinleştir":"Devre dışı bırak"});
+  if(!ok) return; const r=await post("/api/fwrule/toggle",{name,dir,enable}); r.ok?(toast(enable?"Kural etkinleştirildi":"Kural devre dışı bırakıldı"),loadFw(true)):toast(r.error,1);
+}
+async function fwRuleScope(name,dir){
+  const v = await uiAsk({title:"Uzak adresi sınırla",danger:false,ok:"Sınırla",
+    text:`"${name}" kuralı yalnızca aşağıdaki adreslerden gelen bağlantılara izin verecek (virgülle ayırın).\n\nTailscale kullanıyorsanız varsayılan değer yeterlidir: 100.64.0.0/10 (IPv4) ve fd7a:115c:a1e0::/48 (IPv6). Bu aralık dışından gelen bağlantılar reddedilir. İşlemden önce otomatik yedek alınır.`,
+    input:{value:"100.64.0.0/10,fd7a:115c:a1e0::/48",placeholder:"örn. 100.64.0.0/10,192.168.1.0/24"}});
+  if(v===null||!String(v).trim()) return; const r=await post("/api/fwrule/scope",{name,dir,remote:String(v).trim()}); r.ok?(toast("Kural sınırlandı"),loadFw(true)):toast(r.error,1);
+}
+window.fwRuleToggle=fwRuleToggle;
+$("#fwhealth").addEventListener("click",e=>{ const d=e.target.closest("[data-fwdis]"), s=e.target.closest("[data-fwscope]");
+  if(d) fwRuleToggle(d.dataset.fwdis,d.dataset.d,false); else if(s) fwRuleScope(s.dataset.fwscope,s.dataset.d); });
+async function loadFwBackups(){
+  const r=await api("/api/fwbackups"); const el=$("#fwbackups"), b=r.backups||[];
+  $("#fwbkinfo").textContent=b.length?`${b.length} yedek`:"";
+  const act = ADMIN ? `<button class="sm primary" id="fwbknow">Şimdi yedekle</button>` : `<span class="muted">Yedek almak/geri yüklemek için yönetici gerekli</span>`;
+  el.innerHTML=`<div class="toolbar" style="margin:0 0 8px">${act}<span class="grow"></span><span class="muted" style="font-size:12px">Riskli işlemlerden (ülke engeli, internet kesme, engelleme) önce otomatik yedek alınır. Klasör: <span class="mono">${esc(r.dir||"")}</span></span></div>`
+   + (b.length ? `<div class="tw short"><table><thead><tr><th>Tarih</th><th>Neden</th><th class="num">Boyut</th><th></th></tr></thead><tbody>${b.map(x=>`<tr><td>${dt(x.t)}</td><td>${esc(x.reason)}</td><td class="num">${bytes(x.size)}</td>
+      <td style="text-align:right;white-space:nowrap">${ADMIN?`<button class="sm" data-bkrestore="${esc(x.name)}">Geri yükle</button> `:""}<button class="sm" data-bkdel="${esc(x.name)}">Sil</button></td></tr>`).join("")}</tbody></table></div>`
+     : '<div class="muted">Henüz yedek yok.</div>');
+  if($("#fwbknow")) $("#fwbknow").onclick=async()=>{ const r=await post("/api/fwbackup",{}); r.ok?(toast("Yedek alındı"),loadFwBackups()):toast(r.error,1); };
+}
+$("#fwbackups").addEventListener("click",async e=>{
+  const rs=e.target.closest("[data-bkrestore]"), dl=e.target.closest("[data-bkdel]");
+  if(rs){ if(!await uiConfirm(`Güvenlik duvarının TÜM kuralları ve ayarları şu yedeğe döndürülecek:\n${rs.dataset.bkrestore}\n\nYedekten sonra eklediğiniz kurallar silinir, silinenler geri gelir. Geri yüklemeden hemen önce mevcut durumun da yedeği alınır.`,{danger:true,title:"Yedekten geri yükle",ok:"Geri yükle"})) return;
+    toast("Geri yükleniyor…"); const r=await post("/api/fwrestore",{name:rs.dataset.bkrestore}); r.ok?(toast("Geri yüklendi"),loadFw(true)):toast(r.error,1); }
+  else if(dl){ if(!await uiConfirm(`${dl.dataset.bkdel} yedeği silinsin mi?`,{danger:true,ok:"Sil"})) return;
+    const r=await post("/api/fwbackup/delete",{name:dl.dataset.bkdel}); r.ok?(toast("Silindi"),loadFwBackups()):toast(r.error,1); }
+});
+$("#sdrules").addEventListener("click",async e=>{const b=e.target.closest("[data-rm]"); if(!b) return; const r=await post("/api/fw/remove",{name:b.dataset.rm}); r.ok?(toast("Kural silindi"),loadFw(true)):toast(r.error,1);});
+$("#blkkind").oninput=()=>$("#blkval").placeholder={ip:"ör. 203.0.113.5 veya 10.0.0.0/8",program:"C:\\yol\\program.exe",port:"ör. 445"}[$("#blkkind").value];
+$("#blkgo").onclick=async()=>{ const kind=$("#blkkind").value, value=$("#blkval").value.trim(); if(!value) return;
+  const r=await post("/api/block",{kind,value,dir:$("#blkdir").value,proto:"TCP"}); r.ok?(toast("Kural eklendi"),$("#blkval").value="",loadFw(true)):toast(r.error,1); };
+function renderRules(){
+  if(!FWDATA) return;
+  const q=$("#ruleq").value.toLowerCase(), d=$("#ruledir").value, a=$("#ruleact").value, en=$("#ruleen").checked, op=$("#ruleopen").checked;
+  const all=FWDATA.rules||[];
+  const rows = all.filter(r=>(!q||[r.name,r.app,r.svc,r.lport,r.rport,r.group].join(" ").toLowerCase().includes(q)) && (!d||r.dir===d) && (!a||r.action===a) && (!en||r.enabled)
+    && (!op||(r.dir==="in"&&r.action==="allow"&&r.raddr==="*"&&r.enabled)));
+  const n = table($("#ruletable"),"rules",[
+    {k:"enabled",l:"Etkin",f:r=>r.enabled?'<span class="ok">●</span>':'<span class="dim">○</span>'},
+    {k:"name",l:"Ad",f:r=>`<b>${esc(r.name)}</b>`,t:r=>r.name},
+    {k:"dir",l:"Yön",f:r=>r.dir==="in"?DIR.in:DIR.out},
+    {k:"action",l:"Eylem",f:r=>r.action==="allow"?'<span class="tag ok">İzin</span>':'<span class="tag bad">Engel</span>'},
+    {k:"proto",l:"Prot."},
+    {k:"lport",l:"Yerel port",cls:"mono"},
+    {k:"rport",l:"Uzak port",cls:"mono"},
+    {k:"raddr",l:"Uzak adres",cls:"mono",t:r=>r.raddr},
+    {k:"app",l:"Program / servis",f:r=>`<span class="mono muted">${esc(r.app||r.svc||"Tümü")}</span>`,t:r=>r.app||r.svc},
+    {k:"profiles",l:"Profil"},
+    {k:"group",l:"Grup",f:r=>`<span class="muted">${esc(r.group)}</span>`},
+    {k:"_t",l:"",s:r=>0,f:r=>ADMIN&&!r.sysdash&&!r.name.endsWith("(Store uygulaması)")?`<button class="sm" data-fwtog="${esc(r.name)}" data-d="${r.dir}" data-en="${r.enabled?1:0}">${r.enabled?"Devre dışı bırak":"Etkinleştir"}</button>`:""},
+  ], rows, {sort:"name", desc:false, max:2000});
+  $("#rulecount").textContent=`${n} / ${all.length} kural`;
+}
+["#ruleq","#ruledir","#ruleact","#ruleen","#ruleopen"].forEach(s=>$(s).addEventListener("input",renderRules));
+$("#rulereload").onclick=()=>loadFw(true);
+$("#ruletable").addEventListener("click",e=>{ const b=e.target.closest("[data-fwtog]"); if(b) fwRuleToggle(b.dataset.fwtog,b.dataset.d,b.dataset.en!=="1"); });
+
+/* ================= AĞ ================= */
+function renderFlow(d){
+  const el=$("#flowmap"), edges=d.edges||[];
+  if(!edges.length){ el.innerHTML='<div class="empty">Şu anda internete açık bağlantı yok.</div>'; return; }
+  const pt=new Map(); edges.forEach(e=>pt.set(e.name,(pt.get(e.name)||0)+e.n));
+  const L=[...pt].sort((a,b)=>b[1]-a[1]).slice(0,12), ln=new Set(L.map(x=>x[0]));
+  const rt=new Map(); edges.filter(e=>ln.has(e.name)).forEach(e=>rt.set(e.ip,(rt.get(e.ip)||0)+e.n));
+  const R=[...rt].sort((a,b)=>b[1]-a[1]).slice(0,16), rn=new Set(R.map(x=>x[0]));
+  const host={}; edges.forEach(e=>{ if(e.host) host[e.ip]=e.host; });
+  const W=1000, rowH=27, n=Math.max(L.length,R.length), H=n*rowH+16, lx=300, rx=700;
+  const yOf=(arr)=>{ const off=(n-arr.length)*rowH/2; return new Map(arr.map((x,i)=>[x[0],8+off+i*rowH+rowH/2])); };
+  const ly=yOf(L), ry=yOf(R), cut=(s,m)=>s.length>m?s.slice(0,m-1)+"…":s;
+  const paths=edges.filter(e=>ln.has(e.name)&&rn.has(e.ip)).map(e=>{ const y1=ly.get(e.name), y2=ry.get(e.ip), mx=(lx+rx)/2;
+    return `<path class="ed" data-l="${esc(e.name)}" data-r="${esc(e.ip)}" d="M${lx},${y1} C${mx},${y1} ${mx},${y2} ${rx},${y2}" stroke-width="${Math.min(6,1+e.n*.9).toFixed(1)}"/>`; }).join("");
+  const lnodes=L.map(([k,c])=>`<g class="nd" data-l="${esc(k)}"><circle cx="${lx}" cy="${ly.get(k)}" r="4.5"/><text x="${lx-12}" y="${ly.get(k)+4}" text-anchor="end">${esc(cut(k,36))}</text><text class="cnt" x="${lx-12-Math.min(k.length,36)*6.6-8}" y="${ly.get(k)+4}" text-anchor="end">${c}</text></g>`).join("");
+  const rnodes=R.map(([k,c])=>`<g class="nd" data-r="${esc(k)}"><circle cx="${rx}" cy="${ry.get(k)}" r="4.5" style="fill:var(--warn)"/><text x="${rx+12}" y="${ry.get(k)+4}">${esc(cut(host[k]||k,38))}</text><title>${esc(k)}${host[k]?" — "+esc(host[k]):""} (${c} bağlantı)</title></g>`).join("");
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="İşlem – internet adresi bağlantı haritası">${paths}${lnodes}${rnodes}</svg>`;
+  const svg=el.firstChild, all=[...svg.querySelectorAll(".ed")];
+  svg.onmouseover=e=>{ const g=e.target.closest(".nd"); if(!g) return; const l=g.dataset.l, r=g.dataset.r;
+    all.forEach(p=>{ const hit=(l&&p.dataset.l===l)||(r&&p.dataset.r===r); p.classList.toggle("hi",hit); p.classList.toggle("lo",!hit); }); };
+  svg.onmouseleave=()=>all.forEach(p=>p.classList.remove("hi","lo"));
+}
+async function loadNet(force){
+  const d = await api("/api/network"+(force?"?force=1":""));
+  $("#nics").innerHTML = d.nics.sort((a,b)=>(b.up-a.up)||((b.recv||0)-(a.recv||0))).map(n=>`<div class="card"><h3><span class="dot ${n.up?"ok":"bad"}"></span> ${esc(n.name)} <span class="r muted">${n.speed?n.speed+" Mbps":""}</span></h3>
+    <div class="pcard">${n.addrs.filter(a=>a.fam!=="IPv6"||!a.addr.startsWith("fe80")).map(a=>`<div class="row"><span class="muted">${a.fam}</span><span class="mono">${esc(a.addr)}${a.mask&&a.fam==="IPv4"?" / "+esc(a.mask):""}</span></div>`).join("")}
+    <div class="row"><span class="muted">Anlık</span><span>↓ ${rate(n.down)} · ↑ ${rate(n.up)}</span></div>
+    <div class="row"><span class="muted">Toplam</span><span>↓ ${bytes(n.recv)} · ↑ ${bytes(n.sent)}</span></div>
+    ${(n.errin+n.errout+n.dropin+n.dropout)?`<div class="row"><span class="muted">Hata / düşen</span><span class="warn">${n.errin+n.errout} / ${n.dropin+n.dropout}</span></div>`:""}</div></div>`).join("");
+  table($("#topremote"),"remote",[
+    {k:"ip",l:"Adres",f:r=>`<span class="mono">${esc(r.ip)}</span>`},{k:"host",l:"Host",t:r=>r.host},{k:"n",l:"Bağ.",num:1},
+    {k:"procs",l:"İşlemler",s:r=>r.procs.join(","),f:r=>esc(r.procs.join(", "))},{k:"_a",l:"",f:r=>`<button class="sm" onclick="blockIp('${esc(r.ip)}')">Engelle</button>`}],
+    d.top_remote,{sort:"n",empty:"İnternet bağlantısı yok"});
+  renderFlow(d);
+  const mx=Math.max(1,...d.by_proc.map(x=>x[1]));
+  $("#byproc").innerHTML = d.by_proc.map(([n,c])=>`<div class="li"><div><div class="n">${esc(n)}</div><div class="bar" style="margin-top:3px"><i style="width:${c/mx*100}%"></i></div></div><div class="mono">${c}</div></div>`).join("")||'<div class="muted">–</div>';
+  $("#nbcount").textContent = d.neighbors.length+" cihaz";
+  table($("#neighbors"),"nb",[{k:"ip",l:"IP",f:r=>`<span class="mono">${esc(r.ip)}</span>`},{k:"mac",l:"MAC",cls:"mono"},{k:"state",l:"Durum"},{k:"nic",l:"Arayüz"}],
+    d.neighbors,{sort:"ip",desc:false,empty:esc(d.err||"Kayıt yok")});
+  $("#dns").innerHTML = `<div class="pcard">${d.dns.map(x=>`<div class="row"><span class="muted">${esc(x.nic)}</span><span class="mono">${esc(x.servers)}</span></div>`).join("")}</div>
+    <div class="sect">Ağ profilleri</div><div class="pcard">${(d.profiles||[]).map(p=>`<div class="row"><span>${esc(p.alias)} — ${esc(p.name)}</span><span class="${p.cat==="Public"?"ok":"warn"}">${p.cat==="Public"?"Genel (daha güvenli)":p.cat==="Private"?"Özel":esc(p.cat)}</span></div>`).join("")}</div>
+    <p class="muted" style="font-size:12px">Halka açık Wi-Fi'larda ağ profilinin “Genel” olması önerilir; “Özel” profil, dosya paylaşımı ve cihaz keşfini açar.</p>`;
+}
+
+/* ================= BAŞLANGIÇ ================= */
+let STDATA=null, STT="st";
+$$("#sttabs a").forEach(a=>a.onclick=()=>{ $$("#sttabs a").forEach(x=>x.classList.toggle("on",x===a)); STT=a.dataset.t; renderStartup(); });
+async function loadStartup(force){ $("#sttable").innerHTML='<div class="empty"><div class="prog"><i></i></div>Yükleniyor… (zamanlanmış görevler birkaç saniye sürebilir)</div>'; STDATA = await api("/api/startup"+(force?"?force=1":"")); renderStartup(); }
+async function toggleStartup(i){ const r=STDATA&&STDATA.startup[i]; if(!r) return;
+  const res=await post("/api/startup/toggle",{name:r.name,source:r.source,enable:!r.enabled});
+  if(res.ok){ toast(`${r.name} ${r.enabled?"devre dışı bırakıldı":"etkinleştirildi"}`); loadStartup(true); } else toast(res.error,1); }
+window.toggleStartup=toggleStartup;
+function renderStartup(){
+  if(!STDATA) return;
+  const q=$("#stq").value.toLowerCase(), ms=$("#stms").checked, run=$("#strun").checked;
+  $("#stmsl").style.display = STT==="st"?"none":""; $("#strunl").style.display = STT==="sv"?"":"none";
+  let n, total;
+  if(STT==="st"){ const rows=STDATA.startup.filter(r=>!q||(r.name+r.cmd+r.source).toLowerCase().includes(q)); total=STDATA.startup.length;
+    n=table($("#sttable"),"st",[{k:"enabled",l:"Durum",f:r=>r.enabled?'<span class="tag ok">Etkin</span>':'<span class="tag">Devre dışı</span>'},
+      {k:"name",l:"Ad",f:r=>`<b>${esc(r.name)}</b>`},{k:"source",l:"Kaynak",f:r=>`<span class="muted">${esc(r.source)}</span>`},{k:"cmd",l:"Komut",f:r=>`<span class="mono muted">${esc(r.cmd)}</span>`,t:r=>r.cmd},
+      {k:"_a",l:"",f:r=>{ if(!/^(HKCU Run|HKLM Run|HKLM Run \(32-bit\)|Başlangıç klasörü)/.test(r.source)) return ""; const i=STDATA.startup.indexOf(r);
+        return `<button class="sm" onclick="toggleStartup(${i})" title="${r.enabled?"Bir sonraki oturum açışta çalışmaz (çalışan program kapanmaz)":"Oturum açılışında tekrar çalışır"}">${r.enabled?"Devre dışı bırak":"Etkinleştir"}</button>`; }}],rows,{sort:"source",desc:false});
+  } else if(STT==="tk"){ const all=STDATA.tasks||[]; const rows=all.filter(r=>(ms||!r.ms)&&(!q||(r.name+r.path+r.run+r.author).toLowerCase().includes(q))); total=all.length;
+    n=table($("#sttable"),"tk",[{k:"state",l:"Durum",f:r=>`<span class="tag ${r.state==="Running"?"ok":""}">${esc(r.state)}</span>`},{k:"name",l:"Görev",f:r=>`<b>${esc(r.name)}</b>`},
+      {k:"path",l:"Klasör",f:r=>`<span class="muted">${esc(r.path)}</span>`},{k:"trig",l:"Tetikleyici"},{k:"author",l:"Yazar",f:r=>esc(r.author||"")},{k:"run",l:"Çalıştırılan",f:r=>`<span class="mono muted">${esc(r.run)}</span>`,t:r=>r.run}],rows,{sort:"name",desc:false,empty:esc(STDATA.err||"Kayıt yok")});
+  } else { const all=STDATA.services||[]; const rows=all.filter(r=>(ms||!r.ms)&&(!run||r.status==="running")&&(!q||(r.name+r.display+r.bin+r.user).toLowerCase().includes(q))); total=all.length;
+    n=table($("#sttable"),"sv",[{k:"status",l:"Durum",f:r=>`<span class="tag ${r.status==="running"?"ok":""}">${r.status==="running"?"Çalışıyor":r.status==="stopped"?"Durdu":esc(r.status)}</span>`},
+      {k:"display",l:"Servis",f:r=>`<b>${esc(r.display)}</b> <span class="dim">${esc(r.name)}</span>`,t:r=>r.desc},{k:"start",l:"Başlangıç",f:r=>({automatic:"Otomatik",manual:"El ile",disabled:"Devre dışı"}[r.start]||esc(r.start))},
+      {k:"pid",l:"PID",num:1,f:r=>r.pid||""},{k:"user",l:"Hesap",f:r=>`<span class="muted">${esc(r.user)}</span>`},{k:"bin",l:"Çalıştırılabilir",f:r=>`<span class="mono muted">${esc(r.bin)}</span>`,t:r=>r.bin}],rows,
+      {sort:"status",click:r=>r.pid&&openProc(r.pid)});
+  }
+  $("#stcount").textContent = `${n} / ${total}` + (STT!=="st"&&!ms?" (Microsoft dışı)":"");
+}
+["#stq","#stms","#strun"].forEach(s=>$(s).addEventListener("input",renderStartup));
+$("#streload").onclick=()=>loadStartup(true);
+
+/* ================= DİSK ================= */
+let DRIVES_LOADED=false;
+async function loadDisk(){
+  if(!OV) OV = await api("/api/overview");
+  $("#disks").innerHTML = OV.disks.map(d=>`<div class="card"><h3>${esc(d.mount)} <span class="r muted">${esc(d.fs)}</span></h3><div class="kpi"><div class="v">${d.pct}%</div></div>
+    <div class="bar" style="margin:8px 0"><i style="width:${d.pct}%;background:${d.pct>90?"var(--bad)":d.pct>75?"var(--warn)":"var(--accent)"}"></i></div>
+    <div class="pcard"><div class="row"><span class="muted">Kullanılan</span><span>${bytes(d.used)}</span></div><div class="row"><span class="muted">Boş</span><span>${bytes(d.free)}</span></div><div class="row"><span class="muted">Toplam</span><span>${bytes(d.total)}</span></div></div>
+    <button class="sm" style="margin-top:10px" onclick="startScan('${esc(d.mount).replace(/\\/g,"\\\\")}')">Bu diski tara</button></div>`).join("");
+  if(!DRIVES_LOADED){ DRIVES_LOADED=true; const d=await api("/api/drives"); $("#scanpaths").innerHTML=d.drives.map(x=>`<option value="${esc(x.path)}">`).join(""); if(!$("#scanpath").value) $("#scanpath").value=d.drives[0].path; }
+  if(!$("#cleanlist").dataset.loaded){ $("#cleanlist").dataset.loaded="1"; loadCleanup(); }
+  await pollScan();
+}
+async function loadCleanup(force){
+  const el=$("#cleanlist"); if(force) el.innerHTML='<div class="prog"><i></i></div>';
+  const d=await api("/api/cleanup"+(force?"?force=1":""));
+  const tot=(d.items||[]).reduce((s,i)=>s+i.stale,0);
+  el.innerHTML = (d.items&&d.items.length) ? `<div style="margin-bottom:8px"><b class="ok">${bytes(tot)}</b> <span class="muted">güvenle temizlenebilir (1 günden eski)</span></div>
+    <div class="tw short"><table><thead><tr><th>Hedef</th><th class="num">Toplam</th><th class="num">Temizlenebilir</th><th class="num">Dosya</th><th></th></tr></thead><tbody>${d.items.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="mono dim" style="font-size:11px">${esc(i.path)}</div></td><td class="num">${bytes(i.size)}${i.approx?"+":""}</td><td class="num ${i.stale>5e8?"warn":""}">${bytes(i.stale)}</td><td class="num">${i.files.toLocaleString("tr-TR")}</td>
+      <td>${i.admin_only?'<span class="dim">yönetici gerekli</span>':`<button class="sm" data-clean="${i.id}" data-n="${esc(i.name)}" ${i.stale?"":"disabled"}>Temizle</button>`}</td></tr>`).join("")}</tbody></table></div>` : '<div class="muted">Temizlenecek bilinen bir klasör bulunamadı.</div>';
+}
+$("#cleanreload").onclick=()=>loadCleanup(true);
+$("#cleanlist").addEventListener("click",async e=>{ const b=e.target.closest("[data-clean]"); if(!b) return;
+  if(!await uiConfirm(`${b.dataset.n}: 1 günden eski dosyalar silinsin mi? Bu işlem geri alınamaz.`)) return;
+  b.disabled=true; b.textContent="Temizleniyor…"; const r=await post("/api/cleanup",{id:b.dataset.clean});
+  r.ok ? toast(`${bytes(r.freed)} boşaltıldı (${r.removed} dosya${r.skipped?`, ${r.skipped} kullanımda/atlandı`:""})`) : toast(r.error,1); loadCleanup(true); });
+async function startScan(p){ if(p) $("#scanpath").value=p; const r=await post("/api/scan",{path:$("#scanpath").value,min_mb:+$("#scanmin").value||100}); if(!r.ok) toast(r.error,1); pollScan(); }
+window.startScan=startScan;
+$("#scango").onclick=()=>startScan(); $("#scancancel").onclick=()=>post("/api/scan/cancel");
+async function pollScan(){
+  const s = await api("/api/scan");
+  $("#scancancel").style.display = s.running?"":"none"; $("#scango").disabled = s.running;
+  if(!s.started){ $("#scanstatus").innerHTML="Bir klasör seçip taramayı başlatın. Kullanıcı klasörünüz veya C:\\ iyi başlangıç noktalarıdır."; return; }
+  const el = (s.ended||Date.now()/1000)-s.started;
+  $("#scanstatus").innerHTML = (s.running?'<div class="prog"><i></i></div>':"") +
+    `<b>${esc(s.root)}</b> — ${s.files.toLocaleString("tr-TR")} dosya, ${s.dirs.toLocaleString("tr-TR")} klasör, toplam ${bytes(s.bytes)} · ${dur(el)}` +
+    (s.errors?` · <span class="warn">${s.errors} erişilemeyen</span>`:"") + (s.running?`<div class="mono dim" style="margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.current)}</div>`:(s.cancelled?" · iptal edildi":" · tamamlandı"));
+  $("#scanres").hidden = !s.children.length;
+  const bl=(arr,k,lab,onclick)=>{ const mx=Math.max(1,...arr.map(x=>x.size)); return arr.map(x=>`<div class="li"><div><div class="n">${esc(x[k])}</div><div class="bar" style="margin-top:3px"><i style="width:${x.size/mx*100}%"></i></div></div><div class="mono">${bytes(x.size)}</div></div>`).join(""); };
+  $("#scanchildren").innerHTML = bl(s.children.slice(0,20),"name"); $("#scanexts").innerHTML = bl(s.exts.slice(0,20),"ext");
+  LASTSCAN = s; $("#treecard").hidden = !s.children.length; if(s.children.length) drawTree();
+  if(s.top.length){ if(!$("#scanfiles .tw")) $("#scanfiles").innerHTML=`<div class="card"><h3>En büyük dosyalar (≥ ${s.min_mb} MB) <span class="r count" id="scancount"></span></h3><div class="tw short" style="max-height:600px"></div></div>`;
+    const n=table($("#scanfiles .tw"),"files",[{k:"size",l:"Boyut",num:1,f:r=>`<b>${bytes(r.size)}</b>`},{k:"path",l:"Dosya",f:r=>`<span class="mono">${esc(r.path)}</span>`,t:r=>r.path},
+      {k:"mtime",l:"Son değişiklik",f:r=>`<span class="muted">${dt(r.mtime)}</span>`},{k:"_a",l:"",f:r=>`<button class="sm" data-rv="${esc(r.path)}">Klasörde göster</button>`}],s.top,{sort:"size"});
+    $("#scancount").textContent=n+" dosya";
+  } else $("#scanfiles").innerHTML = s.running?"":'<div class="card muted">Bu boyutun üzerinde dosya bulunamadı.</div>';
+  return s.running;
+}
+$("#scanfiles").addEventListener("click",e=>{const b=e.target.closest("[data-rv]"); if(b) post("/api/reveal",{path:b.dataset.rv});});
+$("#scanup").onclick=()=>{ const p=$("#scanpath").value.trim().replace(/[\\\/]+$/,""); const up=p.replace(/[\\\/][^\\\/]*$/,"");
+  if(!p||up===p) return; startScan(/^[A-Za-z]:$/.test(up)?up+"\\":up); };
+
+/* ---------- disk haritası (treemap) ---------- */
+let LASTSCAN=null, TREE_RECTS=[];
+function squarify(items,x,y,w,h){
+  const total=items.reduce((s,i)=>s+i.v,0), scale=w*h/total, out=[]; let rest=items.map(i=>({i,a:i.v*scale}));
+  const worst=(row,side)=>{ const s=row.reduce((q,r)=>q+r.a,0), mx=Math.max(...row.map(r=>r.a)), mn=Math.min(...row.map(r=>r.a)); return Math.max(side*side*mx/(s*s), s*s/(side*side*mn)); };
+  while(rest.length){ const side=Math.min(w,h); let row=[rest[0]], k=1;
+    while(k<rest.length && worst([...row,rest[k]],side)<=worst(row,side)){ row.push(rest[k]); k++; }
+    rest=rest.slice(k); const s=row.reduce((q,r)=>q+r.a,0);
+    if(w>=h){ const rw=s/h; let yy=y; row.forEach(r=>{ const rh=r.a/rw; out.push({it:r.i,x,y:yy,w:rw,h:rh}); yy+=rh; }); x+=rw; w-=rw; }
+    else { const rh=s/w; let xx=x; row.forEach(r=>{ const rw=r.a/rh; out.push({it:r.i,x:xx,y,w:rw,h:rh}); xx+=rw; }); y+=rh; h-=rh; } }
+  return out;
+}
+function drawTree(){
+  const cv=$("#treemap"), s=LASTSCAN; if(!s||!cv||!cv.clientWidth) return;
+  const dpr=devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; if(cv.width!==w*dpr||cv.height!==h*dpr){ cv.width=w*dpr; cv.height=h*dpr; }
+  const x=cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const items=s.children.filter(c=>c.size>0).slice(0,40).map(c=>({v:c.size,name:c.name})); TREE_RECTS=[]; if(!items.length) return;
+  const light=document.documentElement.dataset.theme==="light"; x.font="12px Segoe UI"; x.textBaseline="top";
+  squarify(items,0,0,w,h).forEach((r,i)=>{ const hue=(i*47+200)%360; TREE_RECTS.push(r);
+    x.fillStyle=`hsl(${hue},${light?55:48}%,${light?52:34}%)`; x.fillRect(r.x+1,r.y+1,Math.max(0,r.w-2),Math.max(0,r.h-2));
+    if(r.w>64&&r.h>34){ x.fillStyle="#fff"; x.save(); x.beginPath(); x.rect(r.x+4,r.y+4,r.w-8,r.h-8); x.clip();
+      x.font="600 12px Segoe UI"; x.fillText(r.it.name,r.x+8,r.y+7); x.font="11px Segoe UI"; x.globalAlpha=.85; x.fillText(bytes(r.it.v)+"  ·  %"+(r.it.v/s.bytes*100).toFixed(1),r.x+8,r.y+22); x.restore(); } });
+}
+$("#treemap").addEventListener("mousemove",e=>{ const b=e.target.getBoundingClientRect(), px=e.clientX-b.left, py=e.clientY-b.top;
+  const r=TREE_RECTS.find(r=>px>=r.x&&px<=r.x+r.w&&py>=r.y&&py<=r.y+r.h); e.target.title=r?`${r.it.name} — ${bytes(r.it.v)}\nTıkla: bu klasörü tara`:""; });
+$("#treemap").addEventListener("click",e=>{ const b=e.target.getBoundingClientRect(), px=e.clientX-b.left, py=e.clientY-b.top;
+  const r=TREE_RECTS.find(r=>px>=r.x&&px<=r.x+r.w&&py>=r.y&&py<=r.y+r.h); if(!r||!LASTSCAN||r.it.name.startsWith("(")) return;
+  startScan(LASTSCAN.root.replace(/[\\\/]+$/,"")+"\\"+r.it.name); });
+
+/* ================= GÜVENLİK KONTROLÜ ================= */
+async function loadSec(force){
+  $("#checks").innerHTML='<div class="card"><div class="prog"><i></i></div>Kontroller çalışıyor…</div>';
+  const d = await api("/api/security"+(force?"?force=1":""));
+  const ic={ok:"✓",warn:"!",bad:"✕",info:"i"};
+  const order={bad:0,warn:1,info:2,ok:3};
+  $("#checks").innerHTML = d.checks.slice().sort((a,b)=>order[a.status]-order[b.status]).map(c=>`<div class="check"><div class="ic ${c.status}">${ic[c.status]}</div><div><b>${esc(c.title)}</b><p>${esc(c.detail)}</p>${c.fix&&c.status!=="ok"?`<div class="fix">→ ${esc(c.fix)}</div>`:""}</div></div>`).join("");
+  const scored=d.checks.filter(c=>c.status!=="info"); const pts=scored.reduce((s,c)=>s+(c.status==="ok"?1:c.status==="warn"?.5:0),0);
+  const sc=scored.length?Math.round(pts/scored.length*100):0;
+  $("#secscore").textContent=sc; $("#secscore").className="score "+(sc>=85?"ok":sc>=60?"warn":"bad");
+  const nb=d.checks.filter(c=>c.status==="bad").length, nw=d.checks.filter(c=>c.status==="warn").length;
+  $("#secsum").textContent=`${nb} kritik · ${nw} uyarı · ${d.checks.filter(c=>c.status==="ok").length} uygun`;
+  setBadge("sec", nb||nw||"", nb?"bad":"warn");
+}
+$("#secreload").onclick=()=>{ loadSec(true); loadBaseline(); };
+
+/* ---------- değişiklik tespiti ---------- */
+async function loadBaseline(){
+  const el=$("#basel"); el.innerHTML='<div class="prog"><i></i></div>Karşılaştırılıyor… (zamanlanmış görevler birkaç saniye sürebilir)';
+  let d; try{ d=await api("/api/baseline"); }catch(e){ el.textContent="Okunamadı"; return; }
+  if(!d.exists){ el.innerHTML='Henüz referans noktası yok. Bilgisayarın temiz olduğunu bildiğiniz bir anda <b>“Şimdiki durumu referans al”</b> düğmesine basın; sonrasında eklenen/silinen/değişen <b>başlangıç öğeleri, zamanlanmış görevler, servisler, dinleyen portlar, yerel ağ cihazları ve gelen izin kuralları</b> burada listelenir.'; return; }
+  const K={added:'<span class="tag bad">Yeni</span>',removed:'<span class="tag">Silindi</span>',changed:'<span class="tag warn">Değişti</span>'};
+  const head=`<div style="margin-bottom:10px"><b class="${d.diff.length?"warn":"ok"}">${d.diff.length?d.diff.length+" değişiklik":"Referanstan beri değişiklik yok ✓"}</b> <span class="muted">· referans: ${dt(d.saved)}</span></div>`;
+  el.innerHTML = head + (d.diff.length?'<div class="tw short" id="basetbl"></div>':"");
+  if(d.diff.length) table($("#basetbl"),"base",[{k:"kind",l:"",f:r=>K[r.kind]},{k:"cat",l:"Tür"},{k:"item",l:"Öğe",f:r=>`<b>${esc(r.item)}</b>`,t:r=>r.item},
+    {k:"detail",l:"Ayrıntı",f:r=>`<span class="mono muted">${esc(r.detail)}</span>`,t:r=>r.detail}],d.diff,{sort:"kind",desc:false});
+}
+$("#bsave").onclick=async()=>{ if(!await uiConfirm("Şimdiki durum referans olarak kaydedilsin mi? Önceki referansın üzerine yazılır.")) return;
+  $("#bsave").disabled=true; const r=await post("/api/baseline/save"); $("#bsave").disabled=false; r.ok?(toast("Referans kaydedildi"),loadBaseline()):toast(r.error,1); };
+
+/* ================= DÖNGÜ ================= */
+async function refreshPage(first){
+  try{
+    if(CUR==="overview"&&OV) renderOverview(OV);
+    else if(CUR==="procs"){ if(first||!PAUSED){ const d=await api("/api/processes"); PROCS=d.procs; } renderProcs(); }
+    else if(CUR==="conns"){ if(first||!PAUSED){ const d=await api("/api/connections"); CONNS=d.conns; } renderConns(); }
+    else if(CUR==="ports"){ if(first||!PAUSED){ const d=await api("/api/ports"); PORTS=d.ports; } renderPorts(); }
+    else if(CUR==="feed"){ if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none") renderFeed(); else { await pollFwLog(); renderFwLog(); } }
+    else if(CUR==="fw"){ if(first&&!FWDATA) await loadFw(); else renderRules(); }
+    else if(CUR==="net"){ if(first) await loadNet(); }
+    else if(CUR==="startup"){ if(first&&!STDATA) await loadStartup(); else renderStartup(); }
+    else if(CUR==="disk"){ if(first) await loadDisk(); }
+    else if(CUR==="sec"){ if(first){ loadBaseline(); await loadSec(); } }
+  }catch(e){ console.error(e); }
+}
+let tickN=0;
+async function tick(){
+  tickN++;
+  try{
+    if(!PAUSED){
+      OV = await api("/api/overview");
+      ADMIN = OV.admin;
+      $("#hostname").textContent = OV.host+" · "+OV.user;
+      $("#privdot").className="dot "+(OV.admin?"ok":"warn"); $("#privtxt").textContent=OV.admin?"Yönetici modu":"Standart kullanıcı modu";
+      $("#elevate").style.display=OV.admin?"none":""; paintNetcut();
+      $("#uptime").textContent = "Açılıştan beri "+dur(OV.now-OV.boot);
+      const c=OV.counts;
+      setBadge("feed", c.alerts||"", c.alerts_high?"bad":"warn");
+      setBadge("ports", c.risky||"", "warn");
+      setBadge("procs", c.unsigned||"", "warn");
+      await pollEvents();
+      if(CUR==="net" && tickN%3===0) await loadNet();
+      if(CUR==="disk"){ const running = await pollScan(); }
+      if(CUR==="fw" && tickN%10===0) await loadFw();
+      await refreshPage(false);
+    }
+    $("#clock").textContent = new Date().toLocaleTimeString("tr-TR") + (PAUSED?" · duraklatıldı":"");
+  }catch(e){ $("#clock").innerHTML='<span class="bad">Sunucuya ulaşılamıyor — Gözcü penceresi kapalı olabilir</span>'; }
+  setTimeout(tick, 2000);
+}
+$("#pause").onclick=()=>{ PAUSED=!PAUSED; $("#pause").textContent=PAUSED?"▶ Devam":"⏸ Duraklat"; $("#pause").classList.toggle("primary",PAUSED); };
+$("#elevate").onclick=async()=>{ const r=await post("/api/elevate"); if(!r.ok){ toast(r.error,1); return; }
+  toast("Yönetici olarak yeniden başlatılıyor… Windows onay penceresini kabul edin.");
+  const t0=Date.now(); const w=async()=>{ try{ const o=await api("/api/overview"); if(o.admin){ location.reload(); return; } }catch(e){} if(Date.now()-t0<30000) setTimeout(w,1000); else toast("Yeniden başlatma tamamlanamadı",1); }; setTimeout(w,2000); };
+window.addEventListener("resize",()=>{ if(OV&&CUR==="overview") renderOverview(OV); if(CUR==="disk") drawTree(); });
+
+/* ================= KOMUT PALETİ & KISAYOLLAR ================= */
+const ACTIONS = [
+  {t:"Canlı güncellemeyi duraklat / sürdür",run:()=>$("#pause").click()},
+  {t:"Temayı değiştir (açık / koyu)",run:toggleTheme},
+  {t:"Uyarı bildirimlerini aç / kapat",run:toggleNotify},
+  {t:"Uyarıları temizle",run:async()=>{ await post("/api/alerts/clear"); toast("Uyarılar temizlendi"); }},
+  {t:"Güvenlik kontrolünü yeniden çalıştır",run:()=>{ location.hash="sec"; setTimeout(()=>$("#secreload").click(),50); }},
+  {t:"Değişiklik tespiti için referans noktası kaydet",run:()=>{ location.hash="sec"; setTimeout(()=>$("#bsave").click(),80); }},
+  {t:"Ağ trafiğini en çok kullanan işlemleri göster",run:()=>{ location.hash="conns"; }},
+  {t:"En riskli işlemleri göster (risk skoruna göre)",run:()=>{ location.hash="procs"; setTimeout(()=>{ $("#proctreechk").checked=false; TS.procs={k:"risk",d:true}; renderProcs(); },80); }},
+  {t:"Şüpheli işlemleri göster",run:()=>{ location.hash="procs"; setTimeout(()=>{ $("#procsus").checked=true; renderProcs(); },80); }},
+  {t:"İşlemleri ağaç görünümünde göster",run:()=>{ location.hash="procs"; setTimeout(()=>{ $("#proctreechk").checked=true; renderProcs(); },80); }},
+];
+let palSel=0, palItems=[];
+async function openPal(){ $("#pal").hidden=false; $("#palq").value=""; palSel=0; renderPal(); $("#palq").focus();
+  if(!PROCS.length){ try{ PROCS=(await api("/api/processes")).procs; renderPal(); }catch(e){} } }
+function closePal(){ $("#pal").hidden=true; }
+function renderPal(){
+  const q=$("#palq").value.trim().toLowerCase(), items=[];
+  PAGES.forEach(([id,t,s],i)=>items.push({t,s,k:"sayfa · Alt+"+((i+1)%10),run:()=>{ location.hash=id; },hay:(t+" "+s).toLowerCase()}));
+  ACTIONS.forEach(a=>items.push({...a,k:"eylem",hay:a.t.toLowerCase()}));
+  let out = q ? items.filter(i=>q.split(/\s+/).every(w=>i.hay.includes(w))) : items;
+  if(q) PROCS.filter(p=>(p.name+" "+p.pid+" "+p.exe).toLowerCase().includes(q)).sort((a,b)=>b.cpu-a.cpu||b.mem-a.mem).slice(0,8)
+    .forEach(p=>out.push({t:`${p.name}  ·  ${p.pid}`,s:p.exe||p.user,k:"işlem",run:()=>openProc(p.pid)}));
+  if(q && /^\d{1,3}(\.\d{1,3}){3}$/.test(q)) out.unshift({t:`${q} adresini engelle`,s:"güvenlik duvarı kuralı ekler",k:"eylem",run:()=>blockIp(q)});
+  palItems=out.slice(0,14); palSel=Math.min(palSel,Math.max(0,palItems.length-1));
+  $("#palres").innerHTML = palItems.length ? palItems.map((i,n)=>`<div class="pi ${n===palSel?"sel":""}" data-n="${n}"><span>${esc(i.t)}</span><span class="s">${esc(i.s||"")}</span><span class="k">${esc(i.k)}</span></div>`).join("") : '<div class="empty">Sonuç yok</div>';
+}
+function runPal(n){ const it=palItems[n]; if(!it) return; closePal(); it.run(); }
+$("#palq").addEventListener("input",()=>{ palSel=0; renderPal(); });
+$("#palq").addEventListener("keydown",e=>{
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); palSel=(palSel+(e.key==="ArrowDown"?1:-1)+palItems.length)%Math.max(1,palItems.length); renderPal(); $("#palres .sel")?.scrollIntoView({block:"nearest"}); }
+  else if(e.key==="Enter"){ e.preventDefault(); runPal(palSel); } });
+$("#palres").addEventListener("click",e=>{ const r=e.target.closest("[data-n]"); if(r) runPal(+r.dataset.n); });
+$("#pal").addEventListener("mousedown",e=>{ if(e.target.id==="pal") closePal(); });
+$("#palbtn").onclick=openPal;
+document.addEventListener("keydown",e=>{
+  const typing=/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){ e.preventDefault(); $("#pal").hidden?openPal():closePal(); return; }
+  if(e.key==="Escape"&&!$("#pal").hidden){ closePal(); return; }
+  if(e.altKey&&/^[0-9]$/.test(e.key)){ const p=PAGES[(+e.key+9)%10]; if(p){ e.preventDefault(); location.hash=p[0]; } return; }
+  if(e.key==="/"&&!typing&&$("#pal").hidden){ const s=$("#p-"+CUR+" input[type=search]"); if(s){ e.preventDefault(); s.focus(); s.select(); } }
+});
+route(); tick();
+</script>
+</body>
+</html>

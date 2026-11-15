@@ -932,8 +932,11 @@ function renderConns(){
   const k=[["Kurulu bağlantı",est.length],["Giden",est.filter(c=>c.dir==="out").length],["Gelen",est.filter(c=>c.dir==="in").length],
     ["İnternet adresleri",new Set(est.filter(c=>c.rclass==="public").map(c=>c.rip)).size],["Ağ kullanan işlem",new Set(est.map(c=>c.pid)).size],
     ["Riskli / şüpheli",CONNS.filter(nFlags).length]];
-  $("#connkpis").innerHTML=k.map(([l,v],i)=>`<div class="card kpi"><div class="l">${l}</div><div class="v ${i===5&&v?"warn":""}">${v}</div></div>`).join("");
+  $("#connkpis").innerHTML=k.map(([l,v],i)=>i===5
+    ? `<div class="card kpi click" data-flagged="1" title="Tıklayınca yalnızca riskli / şüpheli olanları gösterir.\n\nİşaretler: şüpheli uzak porta bağlantı (Tor, IRC, Metasploit…), internetten gelen bağlantı, dışarıdan erişilebilen riskli port dinleyen program, geçici klasörden (Temp/Downloads) çalışıp internete bağlanan program, sistem işlemi taklidi."><div class="l">${l}</div><div class="v ${v?"warn":"ok"}">${v}</div></div>`
+    : `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
 }
+$("#connkpis").addEventListener("click",e=>{ if(e.target.closest("[data-flagged]")){ const c=$("#connflag"); c.checked=!c.checked; renderConns(); } });
 ["#connq","#conndir","#connst","#conncls","#connnolo","#connflag"].forEach(s=>$(s).addEventListener("input",renderConns));
 
 /* ================= PORTLAR ================= */

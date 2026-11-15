@@ -859,7 +859,8 @@ class Monitor(threading.Thread):
                     flags.append("sus_rport")
                 if direction == "in":
                     flags.append("inbound_public")
-            if direction == "listen" and lport in RISKY_PORTS and ip_class(lip) in ("any", "private", "public", "linklocal"):
+            if (direction == "listen" and lport in RISKY_PORTS and ip_class(lip) in ("any", "private", "public", "linklocal")
+                    and port_needs_attention(proto, lport, pr.get("exe", ""), pr.get("name", "System" if c.pid in (0, 4) else "?"))):
                 flags.append("risky_listen")
             host = rdns(rip) if rip and rclass in ("public", "private") else None
             row = {
@@ -1902,50 +1903,80 @@ def post_trustport_remove(b):
     return {"ok": True}
 
 
+def _port_match(spec, port):
+    if spec in ("*", "", None):
+        return True
+    for part in str(spec).split(","):
+        part = part.strip()
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            if lo.isdigit() and hi.isdigit() and int(lo) <= port <= int(hi):
+                return True
+        elif part.isdigit() and int(part) == port:
+            return True
+    return False
+
+
+_FWV = {"fw": None, "n": -1, "allow": [], "block": [], "memo": {}}
+
+
+def fw_classify(fw, proto, port, exe):
+    """Gelen trafik icin guvenlik duvari durumu: (blocked|restricted|allowed|default, kural adlari).
+    Ayni kural listesi icin sonuclar onbellege alinir (listener sayisi cok)."""
+    if _FWV["fw"] is not fw or _FWV["n"] != len(fw):
+        _FWV.update(fw=fw, n=len(fw), memo={},
+                    allow=[r for r in fw if r["dir"] == "in" and r["action"] == "allow" and r["enabled"]],
+                    block=[r for r in fw if r["dir"] == "in" and r["action"] == "block" and r["enabled"]])
+    exe_l = (exe or "").lower()
+    mk = (proto, port, exe_l)
+    hit = _FWV["memo"].get(mk)
+    if hit is not None:
+        return hit
+
+    def match(r):
+        if r["proto"] not in (proto, "Tümü"):
+            return False
+        app = (r["app"] or "").lower()
+        if app and app != exe_l:
+            return False
+        if not app and not r["svc"] and r["lport"] in ("*", "") and r["proto"] == "Tümü":
+            return False  # cok genel kurallari sayma
+        if r["svc"] and r["lport"] in ("*", ""):
+            return False  # servise ozel 'her port' kurali: ayni svchost'taki baska servisin portuna uygulanamaz
+        return _port_match(r["lport"], port)
+    blk = [r["name"] for r in _FWV["block"] if match(r)]
+    ar = [r for r in _FWV["allow"] if match(r)]
+    if blk:
+        res = ("blocked", blk[:3])
+    elif ar:
+        # tum izin kurallari belirli uzak adreslerle sinirliysa (ornegin Tailscale) port internete acik degildir
+        if all(r["raddr"] not in ("*", "") for r in ar):
+            res = ("restricted", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]])
+        else:
+            res = ("allowed", [r["name"] for r in ar[:3]])
+    else:
+        res = ("default", [])
+    _FWV["memo"][mk] = res
+    return res
+
+
+def port_needs_attention(proto, port, exe, name):
+    """Riskli bir portta dinleyen soket gercekten dikkat gerektiriyor mu? (dışarıdan erişilebilir, yüksek/orta risk, güvenilir değil)"""
+    info = RISKY_PORTS.get(port)
+    if not info or info[1] not in ("high", "medium"):
+        return False
+    if _tp_key(proto, port, name) in TRUSTPORTS:
+        return False
+    fw = CACHE["fw_rules"].v
+    if not fw:
+        return True    # kurallar okunamadi: bilinmiyor -> temkinli davran
+    return fw_classify(fw, proto, port, exe)[0] == "allowed"
+
+
 def compute_ports(fw):
     """Dinleyen soketler + risk + güvenlik duvarı durumu (uzak adres sınırı dahil)."""
     rows = []
     seen = set()
-    inbound_allow = [r for r in fw if r["dir"] == "in" and r["action"] == "allow" and r["enabled"]]
-    inbound_block = [r for r in fw if r["dir"] == "in" and r["action"] == "block" and r["enabled"]]
-
-    def port_match(spec, port):
-        if spec in ("*", "", None):
-            return True
-        for part in str(spec).split(","):
-            part = part.strip()
-            if "-" in part:
-                a, b = part.split("-", 1)
-                if a.isdigit() and b.isdigit() and int(a) <= port <= int(b):
-                    return True
-            elif part.isdigit() and int(part) == port:
-                return True
-        return False
-
-    def fw_state(proto, port, exe):
-        exe_l = (exe or "").lower()
-
-        def match(r):
-            if r["proto"] not in (proto, "Tümü"):
-                return False
-            app = (r["app"] or "").lower()
-            if app and app != exe_l:
-                return False
-            if not app and not r["svc"] and r["lport"] in ("*", "") and r["proto"] == "Tümü":
-                return False  # cok genel kurallari sayma
-            if r["svc"] and r["lport"] in ("*", ""):
-                return False  # servise ozel 'her port' kurali: ayni svchost'taki baska servisin portuna uygulanamaz
-            return port_match(r["lport"], port)
-        b = [r["name"] for r in inbound_block if match(r)]
-        ar = [r for r in inbound_allow if match(r)]
-        if b:
-            return "blocked", b[:3]
-        if ar:
-            # tum izin kurallari belirli uzak adreslerle sinirliysa (ornegin Tailscale) port internete acik degildir
-            if all(r["raddr"] not in ("*", "") for r in ar):
-                return "restricted", [f'{r["name"]} → {r["raddr"][:60]}' for r in ar[:3]]
-            return "allowed", [r["name"] for r in ar[:3]]
-        return "default", []
 
     for c in MON.snapshot["conns"]:
         if c["dir"] != "listen":
@@ -1962,7 +1993,7 @@ def compute_ports(fw):
         elif not fw:
             fws, fwr = "unknown", []      # kurallar okunamadi: durumu bilmiyoruz, riski dusurme
         else:
-            fws, fwr = fw_state(c["proto"], c["lport"], c["exe"])
+            fws, fwr = fw_classify(fw, c["proto"], c["lport"], c["exe"])
         # reach: portun DISARIDAN gercekten erisilebilir olup olmadigi (dinlemek tek basina risk degildir)
         #   open = herkes (izin kurali var / kurallar okunamadi), limited = belirli adreslerle sinirli,
         #   blocked = guvenlik duvari gelen baglantiyi reddediyor, local = yalniz bu bilgisayar

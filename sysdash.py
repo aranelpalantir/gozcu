@@ -1705,8 +1705,8 @@ def api_overview(q):
               "est": len(est), "listen_tcp": len({(c["lip"], c["lport"]) for c in listen if c["proto"] == "TCP"}),
               "listen_udp": len({(c["lip"], c["lport"]) for c in listen if c["proto"] == "UDP"}),
               "remote_hosts": len({c["rip"] for c in est if c["rclass"] == "public"}),
-              "risky": len({r["lport"] for r in compute_ports(CACHE["fw_rules"].v or [])
-                            if r["proto"] == "TCP" and r["exposed"] and r["risk"] in ("high", "medium")}),
+              "risky": len({(r["proto"], r["lport"]) for r in compute_ports(CACHE["fw_rules"].v or [])
+                            if r["reach"] == "open" and r["risk"] in ("high", "medium")}),
               "alerts": len(al), "alerts_high": sum(1 for a in al if a["level"] == "high"),
               "unsigned": len({p["exe"].lower() for p in procs if p["exe"] and (sig_of(p["exe"]) or {}).get("s") == "NotSigned"})}
     vmd = s.get("vm", {})
@@ -1910,17 +1910,21 @@ def compute_ports(fw):
             fws, fwr = "unknown", []      # kurallar okunamadi: durumu bilmiyoruz, riski dusurme
         else:
             fws, fwr = fw_state(c["proto"], c["lport"], c["exe"])
+        # reach: portun DISARIDAN gercekten erisilebilir olup olmadigi (dinlemek tek basina risk degildir)
+        #   open = herkes (izin kurali var / kurallar okunamadi), limited = belirli adreslerle sinirli,
+        #   blocked = guvenlik duvari gelen baglantiyi reddediyor, local = yalniz bu bilgisayar
+        reach = "local" if not exposed else {"allowed": "open", "unknown": "open", "restricted": "limited",
+                                             "blocked": "blocked", "default": "blocked"}[fws]
         risk = "none"
         if exposed:
             risk = info[1] if info else "low"
-            if fws in ("blocked", "default"):
-                # gelen trafik kural ya da varsayilan politika ile engelli -> bir seviye dusur
-                risk = {"high": "medium", "medium": "low", "low": "none"}.get(risk, risk)
-            elif fws == "restricted":
+            if reach == "blocked":
+                risk = "none"
+            elif reach == "limited":
                 risk = "low" if risk in ("high", "medium") else risk
         s = sig_of(c["exe"])
         rows.append({**c, "svc_name": info[0] if info else "", "risk": risk, "why": info[2] if info else "",
-                     "scope": scope, "exposed": exposed, "fw": fws, "fw_rules": fwr,
+                     "scope": scope, "exposed": exposed, "fw": fws, "reach": reach, "fw_rules": fwr,
                      "sig": s["s"] if s else "",
                      "clients": sum(1 for x in MON.snapshot["conns"] if x["dir"] == "in" and x["lport"] == c["lport"] and x["pid"] == c["pid"])})
     return rows

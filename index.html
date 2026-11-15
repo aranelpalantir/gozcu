@@ -963,7 +963,7 @@ function renderPorts(){
     {k:"name",l:"İşlem",f:p=>`<b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> ${p.sig==="NotSigned"?sigTag("NotSigned"):""}`},
     {k:"reach",l:"Dışarıdan erişim",s:p=>({open:0,limited:1,blocked:2,local:3}[p.reach]),f:reachTag,t:p=>(p.fw_rules||[]).join(" | ")},
     {k:"clients",l:"Bağlı istemci",num:1,f:p=>p.clients||'<span class="dim">–</span>'},
-    {k:"why",l:"Neden önemli",f:p=>p.reach==="open"||p.reach==="limited"?`<span class="muted">${esc(p.why)}</span>`:'<span class="dim">–</span>',t:p=>p.why},
+    {k:"why",l:"Neden önemli",f:p=>(p.trusted?'<span class="tag ok" title="Güvenilir olarak işaretlendi: rozete ve karta sayılmaz">Güvenilir</span> ':"")+(p.reach==="open"||p.reach==="limited"?`<span class="muted">${esc(p.why)}</span>`:'<span class="dim">–</span>'),t:p=>p.why},
     {k:"_a",l:"",f:p=>p.reach==="open"?portAction(p):""},
   ], rows, {sort:"risk", click:p=>p.pid&&openProc(p.pid),
     empty: reach==="open_limited"||reach==="open" ? "✓ Dışarıdan erişilebilir port yok. Güvenlik duvarının engellediği portları görmek için üstteki filtreyi değiştirin." : "Kayıt yok"});
@@ -971,21 +971,32 @@ function renderPorts(){
   const cnt=r=>PORTS.filter(p=>p.reach===r).length, open=PORTS.filter(p=>p.reach==="open");
   const k=[["Dinleyen port (toplam)",PORTS.length,"","","Tümünü göster"],
     ["Dışarıdan erişilebilir",open.length,open.length?"warn":"ok","open","Güvenlik duvarının izin verdiği portlar"],
-    ["…bunlardan riskli",new Set(open.filter(p=>p.risk==="high"||p.risk==="medium").map(p=>p.proto+p.lport)).size,open.some(p=>p.risk==="high")?"bad":(open.some(p=>p.risk==="medium")?"warn":"ok"),"open","Dışarıdan erişilebilir ve yüksek/orta riskli"],
+    ["…bunlardan riskli",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Dışarıdan erişilebilir ve yüksek/orta riskli"],
     ["Kısıtlı erişim",cnt("limited"),"ok","limited","Yalnızca belirli adreslerden erişilebilir (ör. Tailscale)"],
     ["Güvenlik duvarı engelliyor",cnt("blocked"),"ok","blocked","Program dinliyor ama dışarıdan erişilemez: zararsız"],
     ["Yalnız bu bilgisayar",cnt("local"),"","local","Yalnızca 127.0.0.1 üzerinde dinleyenler"]];
   $("#portkpis").innerHTML=k.map(([l,v,c,key,hint])=>`<div class="card kpi click" data-reach="${key}" title="${esc(hint)}"><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`).join("");
   /* menüdeki rozetle aynı kural: dışarıdan erişilebilir, yüksek/orta riskli, port başına tek satır (TCP) */
   const att=[], seenp=new Set();
-  open.filter(p=>p.risk==="high"||p.risk==="medium").sort((a,b)=>RV[b.risk]-RV[a.risk]||a.lport-b.lport)
+  open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).sort((a,b)=>RV[b.risk]-RV[a.risk]||a.lport-b.lport)
     .forEach(p=>{ const key=p.proto+p.lport; if(!seenp.has(key)){ seenp.add(key); att.push(p); } });
+  const ntr=new Set(PORTS.filter(p=>p.trusted).map(p=>p.proto+p.lport+p.name)).size;
+  const trustedNote = ntr ? `<div class="muted" style="font-size:12px;margin-top:8px">${ntr} port güvenilir olarak işaretli · <a href="javascript:void(0)" data-ptmanage="1">Yönet</a></div>` : "";
   $("#portattn").innerHTML = att.length ? `<div class="card"><h3>Dikkat gerektirenler (${att.length}) <span class="r muted">dışarıdan erişilebilir · yüksek/orta riskli</span></h3>`
     + att.map(p=>`<div class="fwi"><span>${RISK[p.risk]}</span><span style="flex:1"><b class="mono">${p.proto} ${p.lport}</b> ${esc(p.svc_name||"")} · <b>${esc(p.name)}</b> <span class="dim mono">${p.pid}</span> · ${reachTag(p)}<br><span class="muted" style="font-size:12px">${esc(p.why||"")}</span></span>
-      <button class="sm" data-pshow="${p.lport}">Tabloda göster</button> ${portAction(p)}</div>`).join("")+`</div>`
-    : `<div class="check"><div class="ic ok">✓</div><div><b>Dışarıdan erişilebilen riskli port yok</b><p>${cnt("blocked")} port dinliyor ama güvenlik duvarı gelen bağlantıyı engelliyor (zararsız)${cnt("limited")?`, ${cnt("limited")} port yalnızca belirli adreslerden erişilebilir`:""}.</p></div></div>`;
+      <button class="sm" data-pshow="${p.lport}">Tabloda göster</button> <button class="sm" data-ptrust="${p.proto}|${p.lport}|${esc(p.name)}" title="Bildiğim bir program (ör. Docker): bu portu uyarı sayma">Güven</button> ${portAction(p)}</div>`).join("")+trustedNote+`</div>`
+    : `<div class="check"><div class="ic ok">✓</div><div><b>Dışarıdan erişilebilen riskli port yok</b><p>${cnt("blocked")} port dinliyor ama güvenlik duvarı gelen bağlantıyı engelliyor (zararsız)${cnt("limited")?`, ${cnt("limited")} port yalnızca belirli adreslerden erişilebilir`:""}.${ntr?` ${ntr} port güvenilir olarak işaretli (<a href="javascript:void(0)" data-ptmanage="1">Yönet</a>).`:""}</p></div></div>`;
 }
-$("#portattn").addEventListener("click",e=>{ const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portreach").value="open"; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
+async function trustPort(key){
+  const [proto,port,...nm]=key.split("|"); const name=nm.join("|");
+  if(!await uiConfirm(`${proto} ${port} (${name}) güvenilir olarak işaretlensin mi?\n\nBu port rozete ve "Dikkat gerektirenler" kartına sayılmaz; tabloda "Güvenilir" etiketiyle görünmeye devam eder. Güvenlik duvarı kuralı değişmez. İstediğiniz zaman "Yönet" bağlantısından geri alırsınız.`,{title:"Portu güvenilir işaretle",ok:"Güven",danger:false})) return;
+  const r=await post("/api/trustports/add",{proto,port:+port,name}); r.ok?(toast("Güvenilir olarak işaretlendi"),refreshPage(true)):toast(r.error,1); }
+async function showTrustedPorts(){
+  const render=async ov=>{ const r=await api("/api/trustports"); const box=ov.querySelector("#tplist"); if(!box) return;
+    box.innerHTML=(r.rules||[]).length ? r.rules.map(x=>`<div class="fwi"><span style="flex:1"><b class="mono">${esc(x.proto)} ${x.port}</b> · ${esc(x.name)}</span><button class="sm" data-tpdel="${esc(x.proto)}|${x.port}|${esc(x.name.toLowerCase())}">Geri al</button></div>`).join("") : '<div class="muted">Güvenilir olarak işaretlenmiş port yok.</div>'; };
+  await uiAsk({title:"Güvenilir portlar",text:"Bu portlar rozete ve \"Dikkat gerektirenler\" kartına sayılmaz.",html:'<div id="tplist" style="margin-top:12px;max-height:300px;overflow:auto"></div>',ok:"Kapat",nocancel:true,
+    mount:ov=>{ render(ov); ov.addEventListener("click",async e=>{ const b=e.target.closest("[data-tpdel]"); if(!b) return; await post("/api/trustports/remove",{key:b.dataset.tpdel}); render(ov); refreshPage(true); }); }}); }
+$("#portattn").addEventListener("click",e=>{ const t=e.target.closest("[data-ptrust]"); if(t){ trustPort(t.dataset.ptrust); return; } if(e.target.closest("[data-ptmanage]")){ showTrustedPorts(); return; } const b=e.target.closest("[data-pshow]"); if(b){ $("#portq").value=b.dataset.pshow; $("#portreach").value="open"; renderPorts(); $("#porttable").scrollIntoView({behavior:"smooth",block:"start"}); } });
 $("#portkpis").addEventListener("click",e=>{ const c=e.target.closest("[data-reach]"); if(c){ $("#portreach").value=c.dataset.reach; $("#portq").value=""; renderPorts(); } });
 ["#portq","#portreach","#porttcp"].forEach(s=>$(s).addEventListener("input",renderPorts));
 

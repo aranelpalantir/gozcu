@@ -1706,7 +1706,7 @@ def api_overview(q):
               "listen_udp": len({(c["lip"], c["lport"]) for c in listen if c["proto"] == "UDP"}),
               "remote_hosts": len({c["rip"] for c in est if c["rclass"] == "public"}),
               "risky": len({(r["proto"], r["lport"]) for r in compute_ports(CACHE["fw_rules"].v or [])
-                            if r["reach"] == "open" and r["risk"] in ("high", "medium")}),
+                            if r["reach"] == "open" and r["risk"] in ("high", "medium") and not r["trusted"]}),
               "alerts": len(al), "alerts_high": sum(1 for a in al if a["level"] == "high"),
               "unsigned": len({p["exe"].lower() for p in procs if p["exe"] and (sig_of(p["exe"]) or {}).get("s") == "NotSigned"})}
     vmd = s.get("vm", {})
@@ -1849,6 +1849,59 @@ def api_connections(q):
     return {"conns": rows, "geo": bool(GEO and GEO.ready)}
 
 
+TRUSTPORTS_FILE = os.path.join(APP_DIR, "trusted_ports.json")
+TRUSTPORTS = {}   # "proto|port|islem adi" -> {"proto","port","name","t","why"}
+
+
+def _tp_key(proto, port, name):
+    return f"{str(proto).upper()}|{int(port)}|{(name or '').lower()}"
+
+
+def _tp_load():
+    try:
+        with open(TRUSTPORTS_FILE, "r", encoding="utf-8") as f:
+            for r in json.load(f):
+                TRUSTPORTS[_tp_key(r["proto"], r["port"], r["name"])] = r
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+def _tp_save():
+    try:
+        with open(TRUSTPORTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(TRUSTPORTS.values()), f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def api_trustports(q):
+    return {"rules": sorted(TRUSTPORTS.values(), key=lambda r: (r["proto"], r["port"]))}
+
+
+def post_trustport_add(b):
+    try:
+        proto, port, name = str(b.get("proto", "")).upper(), int(b.get("port", 0)), str(b.get("name", "")).strip()
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Geçersiz port"}
+    if proto not in ("TCP", "UDP") or not (0 < port < 65536) or not name:
+        return {"ok": False, "error": "Geçersiz port bilgisi"}
+    TRUSTPORTS[_tp_key(proto, port, name)] = {"proto": proto, "port": port, "name": name, "t": time.time(),
+                                               "why": str(b.get("why", ""))[:200]}
+    _tp_save()
+    MON.add_event("action", "info", f"Port güvenilir olarak işaretlendi: {proto} {port} · {name}")
+    return {"ok": True}
+
+
+def post_trustport_remove(b):
+    key = str(b.get("key", ""))
+    r = TRUSTPORTS.pop(key, None)
+    if r is None:
+        return {"ok": False, "error": "Kayıt bulunamadı"}
+    _tp_save()
+    MON.add_event("action", "info", f"Port güveni kaldırıldı: {r['proto']} {r['port']} · {r['name']}")
+    return {"ok": True}
+
+
 def compute_ports(fw):
     """Dinleyen soketler + risk + güvenlik duvarı durumu (uzak adres sınırı dahil)."""
     rows = []
@@ -1925,6 +1978,7 @@ def compute_ports(fw):
         s = sig_of(c["exe"])
         rows.append({**c, "svc_name": info[0] if info else "", "risk": risk, "why": info[2] if info else "",
                      "scope": scope, "exposed": exposed, "fw": fws, "reach": reach, "fw_rules": fwr,
+                     "trusted": _tp_key(c["proto"], c["lport"], c["name"]) in TRUSTPORTS,
                      "sig": s["s"] if s else "",
                      "clients": sum(1 for x in MON.snapshot["conns"] if x["dir"] == "in" and x["lport"] == c["lport"] and x["pid"] == c["pid"])})
     return rows
@@ -3329,11 +3383,11 @@ GET_ROUTES = {
     "/api/connections": api_connections, "/api/ports": api_ports, "/api/events": api_events,
     "/api/firewall": api_firewall, "/api/fwlog": api_fwlog, "/api/etw": api_etw, "/api/etwhist": api_etwhist, "/api/etwproc": api_etwproc, "/api/etwdns": api_etwdns, "/api/timeline": api_timeline, "/api/fwhealth": api_fwhealth, "/api/notify": api_notify, "/api/fwbackups": api_fwbackups,"/api/startup": api_startup,
     "/api/network": api_network, "/api/security": api_security, "/api/scan": api_scan_status,
-    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/suppress": api_suppress, "/api/alerts": api_alerts, "/api/alerthistory": api_alerthistory, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
+    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/suppress": api_suppress, "/api/trustports": api_trustports, "/api/alerts": api_alerts, "/api/alerthistory": api_alerthistory, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
     "/api/cleanup": api_cleanup,
 }
 POST_ROUTES = {
-    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/alerts/dismiss": post_alert_dismiss, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
+    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/trustports/add": post_trustport_add, "/api/trustports/remove": post_trustport_remove, "/api/alerts/dismiss": post_alert_dismiss, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
     "/api/fw/logging": post_fw_logging, "/api/startup/toggle": post_startup_toggle, "/api/reveal": post_reveal, "/api/scan": post_scan,
     "/api/scan/cancel": post_scan_cancel, "/api/elevate": post_elevate, "/api/alerts/clear": post_clear_alerts,
     "/api/suspend": post_suspend, "/api/priority": post_priority, "/api/baseline/save": post_baseline_save,
@@ -3475,6 +3529,7 @@ def main():
     if GEO is not None:
         GEO.start()
     _sup_load()
+    _tp_load()
     _timed_load()
     trim_alert_log()
     threading.Thread(target=timed_loop, daemon=True).start()

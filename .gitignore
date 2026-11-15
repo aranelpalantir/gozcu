@@ -3,6 +3,7 @@ telegram.json
 nettraffic.json
 baseline.json
 suppress.json
+trusted_ports.json
 alerts.jsonl
 timed_blocks.json
 fw_snapshot.json

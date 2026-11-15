@@ -974,7 +974,7 @@ function renderPorts(){
   const cnt=r=>PORTS.filter(p=>p.reach===r).length, open=PORTS.filter(p=>p.reach==="open");
   const k=[["Dinleyen port (toplam)",PORTS.length,"","","Tümünü göster"],
     ["Dışarıdan erişilebilir",open.length,open.length?"warn":"ok","open","Güvenlik duvarının izin verdiği portlar"],
-    ["…bunlardan riskli",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Dışarıdan erişilebilir ve yüksek/orta riskli"],
+    ["Bunların riskli olanı",new Set(open.filter(p=>!p.trusted&&(p.risk==="high"||p.risk==="medium")).map(p=>p.proto+p.lport)).size,open.some(p=>!p.trusted&&p.risk==="high")?"bad":(open.some(p=>!p.trusted&&p.risk==="medium")?"warn":"ok"),"open","Dışarıdan erişilebilen portlardan, bilinen saldırı geçmişi olan servisler (RDP, SMB, Telnet, VNC, DNS…). Güvenilir işaretlediğiniz portlar sayılmaz."],
     ["Kısıtlı erişim",cnt("limited"),"ok","limited","Yalnızca belirli adreslerden erişilebilir (ör. Tailscale)"],
     ["Güvenlik duvarı engelliyor",cnt("blocked"),"ok","blocked","Program dinliyor ama dışarıdan erişilemez: zararsız"],
     ["Yalnız bu bilgisayar",cnt("local"),"","local","Yalnızca 127.0.0.1 üzerinde dinleyenler"]];

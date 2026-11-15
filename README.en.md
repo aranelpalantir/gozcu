@@ -25,6 +25,7 @@ Country/ASN lookups use an offline database, so lookups never leave your machine
   suspicious remote ports, unsigned programs going online. Optional desktop and Telegram notifications.
 - **Firewall tools:** rule health analysis (over-broad allows, risky listening ports, dead/duplicate/conflicting rules), one-click disable or restrict a rule's
   remote addresses, backup/restore (`netsh advfirewall export/import`), change monitoring, block a program / IP / country, and a one-click "cut internet" switch with an auto-restore timer.
+- **Alert management:** per-alert *Mute* (per process + type, reversible, also silences Telegram), a persistent **alert history** (`alerts.jsonl`), and **timed program blocks** (15 min / 1 h / 4 h / permanent, auto-removed).
 - **Other:** startup items and services, disk usage and large-file finder, security checklist, light/dark theme, command palette (`Ctrl+K`).
 
 ## Requirements & running

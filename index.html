@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gözcü</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E %3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22#1b6fa0%22/%3E%3Cstop offset=%221%22 stop-color=%22#4cc2ff%22/%3E%3C/linearGradient%3E%3C/defs%3E %3Cpath d=%22M32 3 L57 11.5 V30 C57 46 46 56 32 61 C18 56 7 46 7 30 V11.5 Z%22 fill=%22url(#g)%22/%3E %3Cpath d=%22M13 31 Q32 12 51 31 Q32 50 13 31 Z%22 fill=%22#eaf6ff%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%229%22 fill=%22#0b3556%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%224%22 fill=%22#04121c%22/%3E %3Ccircle cx=%2235%22 cy=%2228%22 r=%221.6%22 fill=%22#fff%22/%3E %3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E %3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%231b6fa0%22/%3E%3Cstop offset=%221%22 stop-color=%22%234cc2ff%22/%3E%3C/linearGradient%3E%3C/defs%3E %3Cpath d=%22M32 3 L57 11.5 V30 C57 46 46 56 32 61 C18 56 7 46 7 30 V11.5 Z%22 fill=%22url(%23g)%22/%3E %3Cpath d=%22M13 31 Q32 12 51 31 Q32 50 13 31 Z%22 fill=%22%23eaf6ff%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%229%22 fill=%22%230b3556%22/%3E %3Ccircle cx=%2232%22 cy=%2231%22 r=%224%22 fill=%22%2304121c%22/%3E %3Ccircle cx=%2235%22 cy=%2228%22 r=%221.6%22 fill=%22%23fff%22/%3E %3C/svg%3E">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <style>
 :root{
   --bg:#0a0d13; --panel:#111620; --panel2:#171d2a; --hover:#1d2534; --border:#232b3b; --border2:#2e384b;
@@ -317,13 +318,14 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
 
     <!-- CANLI AKIŞ -->
     <section class="page" id="p-feed">
-      <div class="subtabs" id="feedtabs"><a data-t="ev" class="on">Olaylar ve uyarılar</a><a data-t="fw">Güvenlik duvarı logu</a><a data-t="etw">Ağ trafiği (işlem bazlı)</a><a data-t="hist">Trafik geçmişi</a><a data-t="dns">DNS sorguları</a></div>
+      <div class="subtabs" id="feedtabs"><a data-t="ev" class="on">Olaylar ve uyarılar</a><a data-t="fw">Güvenlik duvarı logu</a><a data-t="etw">Ağ trafiği (işlem bazlı)</a><a data-t="hist">Trafik geçmişi</a><a data-t="dns">DNS sorguları</a><a data-t="ahist">Uyarı geçmişi</a></div>
       <div id="feed-ev">
         <div class="toolbar">
           <div class="chips" id="evchips"></div>
           <input type="search" id="evq" placeholder="Olaylarda ara…">
           <span class="grow"></span><span class="count" id="evcount"></span>
           <button class="sm" id="evclear">Ekranı temizle</button>
+          <button class="sm" id="supbtn" title="Susturulan uyarıları gör / geri aç">Susturulanlar</button>
         </div>
         <div class="feed" id="feed"></div>
       </div>
@@ -335,6 +337,15 @@ kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--border
           <span class="grow"></span><span class="count" id="fwcount"></span>
         </div>
         <div class="tw" id="fwlogtable"></div>
+      </div>
+      <div id="feed-ahist" style="display:none">
+        <div class="toolbar">
+          <select id="ahdays"><option value="7">Son 7 gün</option><option value="30" selected>Son 30 gün</option><option value="90">Son 90 gün</option><option value="365">Son 1 yıl</option></select>
+          <input type="search" id="ahq" placeholder="Uyarı, işlem ara…">
+          <span class="grow"></span><span class="count" id="ahcount"></span>
+        </div>
+        <div class="tw" id="ahtable"></div>
+        <p class="muted" style="font-size:12px;margin-top:8px">Uyarılar <span class="mono">alerts.jsonl</span> dosyasında kalıcı tutulur (Gözcü kapanınca silinmez; dosya 2 MB'ı aşınca eskiler budanır).</p>
       </div>
       <div id="feed-dns" style="display:none">
         <div id="dnsbanner"></div>
@@ -506,11 +517,11 @@ function uiAsk(o){ return new Promise(res=>{
   const choices=o.choices||null; let choice=o.choice;
   const body=esc(o.text||"").replace(/\n/g,"<br>");
   ov.innerHTML=`<div class="mdl${o.danger?" danger":""}" role="dialog" aria-modal="true" aria-label="${esc(o.title||"Onay")}">
-    <h3>${esc(o.title||"Onay")}</h3><div class="mdl-b">${body}</div>
+    <h3>${esc(o.title||"Onay")}</h3><div class="mdl-b">${body}</div>${o.html||""}
     ${choices?`<div class="mdl-ch">${choices.map((c,i)=>`<button type="button" class="chip${c.value===choice?" on":""}" data-i="${i}">${esc(c.label)}</button>`).join("")}</div>`:""}
     ${o.input?`<input class="mdl-in" type="${o.input.type||"text"}" value="${esc(o.input.value??"")}" placeholder="${esc(o.input.placeholder||"")}">`:""}
     ${(o.inputs||[]).map(i=>`<label class="mdl-lb">${esc(i.label||"")}<input class="mdl-in" data-k="${esc(i.key)}" type="${i.type||"text"}" value="${esc(i.value??"")}" placeholder="${esc(i.placeholder||"")}" autocomplete="off" spellcheck="false"></label>`).join("")}
-    <div class="mdl-a"><button type="button" class="mdl-c">${esc(o.cancel||"İptal")}</button><button type="button" class="mdl-ok ${o.danger?"danger":"primary"}">${esc(o.ok||"Tamam")}</button></div></div>`;
+    <div class="mdl-a">${o.nocancel?"":`<button type="button" class="mdl-c">${esc(o.cancel||"İptal")}</button>`}<button type="button" class="mdl-ok ${o.danger?"danger":"primary"}">${esc(o.ok||"Tamam")}</button></div></div>`;
   document.body.appendChild(ov);
   const inp=ov.querySelector(".mdl-in");
   const done=v=>{ document.removeEventListener("keydown",key,true); ov.remove(); _mdlOpen=false; try{ prev&&prev.focus&&prev.focus(); }catch(e){} res(v); };
@@ -522,7 +533,7 @@ function uiAsk(o){ return new Promise(res=>{
       f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus(); } }
   document.addEventListener("keydown",key,true);
   ov.addEventListener("mousedown",e=>{ if(e.target===ov) done(null); });
-  ov.querySelector(".mdl-c").onclick=()=>done(null); ov.querySelector(".mdl-ok").onclick=ok;
+  const cb=ov.querySelector(".mdl-c"); if(cb) cb.onclick=()=>done(null); ov.querySelector(".mdl-ok").onclick=ok; if(o.mount) o.mount(ov);
   ov.querySelectorAll(".mdl-ch .chip").forEach(b=>b.onclick=()=>{ choice=choices[+b.dataset.i].value; ov.querySelectorAll(".mdl-ch .chip").forEach(x=>x.classList.toggle("on",x===b)); });
   (inp||ov.querySelector(".mdl-ok")).focus(); if(inp) inp.select();
 }); }
@@ -830,8 +841,7 @@ async function openProc(pid, evT){
     r.ok ? (toast(resume?"İşlem devam ettirildi":"İşlem askıya alındı — dondurulur, 'Devam ettir' ile geri açılır"), openProc(pid)) : toast(r.error,1); };
   $("#pprio").onchange = async e=>{ const r=await post("/api/priority",{pid,level:e.target.value}); r.ok?toast("Öncelik değiştirildi"):(toast(r.error,1),openProc(pid)); };
   if(d.exe){ $("#preveal").onclick=()=>post("/api/reveal",{path:d.exe});
-    $("#pblock").onclick=async()=>{ if(!await uiConfirm(`${d.exe}\n\nBu programın gelen ve giden tüm ağ trafiği engellensin mi?`)) return;
-      const r=await post("/api/block",{kind:"program",value:d.exe,dir:"both"}); r.ok?toast("Güvenlik duvarı kuralı eklendi"):toast(r.error,1); }; }
+    $("#pblock").onclick=()=>blockProg(d.exe,d.name); }
 }
 window.openProc = openProc;
 function closeDrawer(){ $("#drawer").classList.remove("on"); }
@@ -925,7 +935,7 @@ $("#evchips").innerHTML = Object.entries(EVK).map(([k,[l]])=>`<span class="chip 
 $("#evchips").addEventListener("click",e=>{const c=e.target.closest(".chip"); if(!c) return; const k=c.dataset.k; EVON.has(k)?EVON.delete(k):EVON.add(k); c.classList.toggle("on"); renderFeed();});
 $("#evq").addEventListener("input",renderFeed);
 $("#evclear").onclick=()=>{EVCUT=EVLAST; renderFeed();};
-$$("#feedtabs a").forEach(a=>a.onclick=()=>{ $$("#feedtabs a").forEach(x=>x.classList.toggle("on",x===a)); $("#feed-ev").style.display=a.dataset.t==="ev"?"":"none"; $("#feed-fw").style.display=a.dataset.t==="fw"?"":"none"; $("#feed-etw").style.display=a.dataset.t==="etw"?"":"none"; $("#feed-hist").style.display=a.dataset.t==="hist"?"":"none"; $("#feed-dns").style.display=a.dataset.t==="dns"?"":"none"; refreshPage(true); });
+$$("#feedtabs a").forEach(a=>a.onclick=()=>{ $$("#feedtabs a").forEach(x=>x.classList.toggle("on",x===a)); $("#feed-ev").style.display=a.dataset.t==="ev"?"":"none"; $("#feed-fw").style.display=a.dataset.t==="fw"?"":"none"; $("#feed-etw").style.display=a.dataset.t==="etw"?"":"none"; $("#feed-hist").style.display=a.dataset.t==="hist"?"":"none"; $("#feed-dns").style.display=a.dataset.t==="dns"?"":"none"; $("#feed-ahist").style.display=a.dataset.t==="ahist"?"":"none"; refreshPage(true); });
 /* ---------- bildirimler ---------- */
 let NOTIFY = lsGet("sysdash.notify","0")==="1" && "Notification" in window && Notification.permission==="granted", EVINIT=false;
 function updBell(){ $("#bell").textContent = NOTIFY?"Bildirim ●":"Bildirim ○"; $("#bell").title = NOTIFY?"Uyarı bildirimleri AÇIK (kapatmak için tıkla)":"Uyarı bildirimleri kapalı (açmak için tıkla)"; $("#bell").classList.toggle("primary",NOTIFY); }
@@ -957,10 +967,10 @@ function renderFeed(){
   const rows = EVENTS.filter(e=>e.id>EVCUT && EVON.has(e.kind) && (!q||e.msg.toLowerCase().includes(q))).slice(-800).reverse();
   $("#evcount").textContent = rows.length+" olay";
   const f=$("#feed");
-  f.innerHTML = rows.length ? rows.map(e=>{const [l,c]=EVK[e.kind]||[e.kind,""]; return `<div class="ev ${e.level}" ${e.pid?`data-pid="${e.pid}" data-t="${e.t}" style="cursor:pointer"`:""}><span class="dim">${tm(e.t)}</span><span class="k"><span class="tag ${e.level==="high"?"bad":c}">${l}</span></span><span>${esc(e.msg)}</span></div>`;}).join("")
+  f.innerHTML = rows.length ? rows.map(e=>{const [l,c]=EVK[e.kind]||[e.kind,""]; return `<div class="ev ${e.level}" ${e.pid?`data-pid="${e.pid}" data-t="${e.t}" style="cursor:pointer"`:""}><span class="dim">${tm(e.t)}</span><span class="k"><span class="tag ${e.level==="high"?"bad":c}">${l}</span></span><span>${esc(e.msg)}${e.kind==="alert"&&e.cat&&e.name?` <button class="sm" data-sup="${esc(e.cat)}" data-n="${esc(e.name)}" data-m="${esc(e.msg.slice(0,160))}" title="Bu işlemin bu türdeki uyarılarını sustur">Sustur</button>`:""}</span></div>`;}).join("")
     : '<div class="empty">Henüz olay yok. Panel açık kaldıkça başlayan programlar, yeni bağlantılar ve açılan portlar burada akacak.</div>';
 }
-$("#feed").addEventListener("click",e=>{const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid, r.dataset.t?+r.dataset.t:undefined);});
+$("#feed").addEventListener("click",e=>{ const sb=e.target.closest("[data-sup]"); if(sb){ suppressAlert(sb.dataset.sup,sb.dataset.n,sb.dataset.m); return; } if(e.target.closest("button")) return; const r=e.target.closest("[data-pid]"); if(r) openProc(+r.dataset.pid, r.dataset.t?+r.dataset.t:undefined);});
 
 let FWLOG=[], FWLAST=0; const FWON=new Set(["ALLOW","DROP"]);
 $("#fwchips").innerHTML = `<span class="chip on" data-k="ALLOW">İzin verilen</span><span class="chip on" data-k="DROP">Engellenen</span><span class="chip on" data-k="SEND">Giden</span><span class="chip on" data-k="RECEIVE">Gelen</span><span class="chip on" data-k="HIDEMC" title="Hedefi multicast (224-239.x.x.x, ff..) veya broadcast (…255) olan paketleri gizle: SSDP, mDNS, NetBIOS duyuruları vb.">Multicast/yayını gizle</span><span class="chip on" data-k="HIDELAN" title="Kaynağı yerel ağdan (192.168.x, 10.x, 172.16-31.x, 169.254.x) olan ve hedef portu NetBIOS (137/138), SSDP (1900), mDNS (5353), LLMNR (5355) veya WS-Discovery (3702) olan engellenmiş paketleri gizle">Yerel ağ gürültüsünü gizle</span>`;
@@ -1011,8 +1021,13 @@ Bu ülkedeki sitelere ve CDN/bulut sunucularına erişim kesilir; kuralların ek
   toast(`${cc} engelleniyor… lütfen bekleyin`); const r=await post("/api/blockcountry",{cc}); r.ok?(toast(`${cc} engellendi (${r.ranges} aralık)`),pollEtw().then(renderEtw)):toast(r.error,1); }
 async function unblockCc(cc){ const r=await post("/api/unblockcountry",{cc}); r.ok?(toast(cc+" engeli kaldırıldı"),pollEtw().then(renderEtw)):toast(r.error,1); }
 window.blockCc=blockCc; window.unblockCc=unblockCc;
-async function blockProg(exe,name){ if(!await uiConfirm(`${name}\n${exe}\n\nBu programın gelen ve giden tüm ağ trafiği engellensin mi? (Engeli aynı yerden veya Güvenlik Duvarı sekmesinden kaldırabilirsiniz.)`)) return;
-  const r=await post("/api/block",{kind:"program",value:exe,dir:"both"}); r.ok?(toast(name+" engellendi"),pollEtw().then(renderEtw)):toast(r.error,1); }
+async function blockProg(exe,name){
+  const m=await uiAsk({title:"İnternet erişimini kes",danger:true,ok:"Engelle",
+    text:`${name}\n${exe}\n\nBu programın gelen ve giden tüm ağ trafiği engellensin mi? Süreli engel, süre dolunca kendiliğinden kalkar (Gözcü yönetici modunda açıkken). Süresiz engeli buradan ya da Güvenlik Duvarı sekmesinden kaldırabilirsiniz.`,
+    choices:[{label:"15 dk",value:15},{label:"1 saat",value:60},{label:"4 saat",value:240},{label:"Süresiz",value:0}],choice:60});
+  if(m===null) return;
+  const r=await post("/api/block",{kind:"program",value:exe,dir:"both",minutes:m});
+  r.ok?(toast(`${name} engellendi`+(m?` (${m>=60?m/60+" saat":m+" dk"})`:"")),pollEtw().then(renderEtw)):toast(r.error,1); }
 async function unblockProg(exe){ const r=await post("/api/unblock",{value:exe}); r.ok?(toast("Engel kaldırıldı"),pollEtw().then(renderEtw)):toast(r.error,1); }
 window.blockProg=blockProg; window.unblockProg=unblockProg;
 $("#etwq").addEventListener("input",renderEtw); $("#etwlo").addEventListener("input",renderEtw);
@@ -1029,7 +1044,7 @@ function renderEtw(){
     {k:"tx",l:"Toplam giden",num:1,s:p=>p.tx,f:p=>bytes(p.tx)},
     {k:"rx",l:"Toplam gelen",num:1,s:p=>p.rx,f:p=>bytes(p.rx)},
     {k:"blk",l:"İnternet",s:p=>p.blk?1:0,f:p=>!p.exe?"":p.blk
-      ? `<span class="tag bad">Engelli</span> <button class="sm" onclick="unblockProg(${JSON.stringify(p.exe).replace(/"/g,"&quot;")})">Engeli kaldır</button>`
+      ? `<span class="tag bad">Engelli${p.until?` · ${dur(Math.max(0,p.until-Date.now()/1000))}`:""}</span> <button class="sm" onclick="unblockProg(${JSON.stringify(p.exe).replace(/"/g,"&quot;")})">Engeli kaldır</button>`
       : `<button class="sm" onclick="blockProg(${JSON.stringify(p.exe).replace(/"/g,"&quot;")},${JSON.stringify(p.name).replace(/"/g,"&quot;")})" title="Bu programın gelen/giden tüm internet erişimini kes">Kes</button>`},
   ], ps, {sort:"rx",max:200,empty:"Henüz trafik yok",click:p=>{ if(p.pid>0) openProc(p.pid); }});
   const fl = (ETW.flows||[]).filter(ok);
@@ -1104,6 +1119,28 @@ function renderHist(){
   $("#histcount").textContent=`${n} işlem`;
 }
 $("#histdays").addEventListener("change",()=>{ HIST=null; loadHist(); }); $("#histq").addEventListener("input",renderHist);
+
+async function suppressAlert(cat,name,msg){
+  if(!await uiConfirm(`"${name}" için bu türdeki uyarılar bir daha gösterilmeyecek ve Telegram'a gönderilmeyecek.\n\nÖrnek: ${msg}\n\nİstediğiniz zaman "Susturulanlar" düğmesinden geri açabilirsiniz.`,{title:"Uyarıyı sustur",ok:"Sustur",danger:false})) return;
+  const r=await post("/api/suppress/add",{cat,name,example:msg}); r.ok?(toast("Uyarı susturuldu"),refreshPage(true)):toast(r.error,1); }
+$("#supbtn").onclick=async()=>{
+  const render=async ov=>{ const r=await api("/api/suppress"); const box=ov.querySelector("#suplist"); if(!box) return;
+    box.innerHTML = (r.rules||[]).length ? r.rules.map(x=>`<div class="fwi"><span style="flex:1"><b>${esc(x.name)}</b> <span class="muted">· ${esc(x.cat)}</span><br><span class="mono muted" style="font-size:11px">${esc(x.example||"")}</span></span><button class="sm" data-supdel="${esc(x.cat)}|${esc(x.name.toLowerCase())}">Geri aç</button></div>`).join("") : '<div class="muted">Susturulmuş uyarı yok.</div>'; };
+  await uiAsk({title:"Susturulan uyarılar",text:"Bu işlem ve türdeki uyarılar gösterilmiyor ve Telegram'a gönderilmiyor.",html:'<div id="suplist" style="margin-top:12px;max-height:320px;overflow:auto"></div>',ok:"Kapat",nocancel:true,
+    mount:ov=>{ render(ov); ov.addEventListener("click",async e=>{ const b=e.target.closest("[data-supdel]"); if(!b) return; await post("/api/suppress/remove",{key:b.dataset.supdel}); render(ov); }); }});
+};
+let AH=null, AHT=0;
+async function loadAhist(){ const d=$("#ahdays").value;
+  if(!AH||AH.days!==+d||Date.now()-AHT>10000){ AH=await api("/api/alerthistory?days="+d); AHT=Date.now(); } renderAhist(); }
+function renderAhist(){ if(!AH) return; const q=$("#ahq").value.toLowerCase();
+  const rows=(AH.rows||[]).filter(r=>!q||((r.msg||"")+" "+(r.name||"")+" "+(r.cat||"")).toLowerCase().includes(q));
+  const n=table($("#ahtable"),"ahist",[
+    {k:"t",l:"Tarih",s:r=>r.t,f:r=>`<span class="muted">${dt(r.t)}</span>`},
+    {k:"level",l:"Seviye",f:r=>`<span class="tag ${r.level==="high"?"bad":"warn"}">${r.level==="high"?"Yüksek":r.level==="warn"?"Orta":"Bilgi"}</span>`},
+    {k:"name",l:"İşlem",f:r=>esc(r.name||"")},{k:"msg",l:"Uyarı",f:r=>esc(r.msg||"")},
+  ], rows, {sort:"t",max:1500,empty:"Kayıtlı uyarı yok"});
+  $("#ahcount").textContent=`${n} uyarı`; }
+$("#ahdays").addEventListener("change",()=>{ AH=null; loadAhist(); }); $("#ahq").addEventListener("input",renderAhist);
 
 /* ================= GÜVENLİK DUVARI ================= */
 let FWDATA=null;
@@ -1397,7 +1434,7 @@ async function refreshPage(first){
     else if(CUR==="procs"){ if(first||!PAUSED){ const d=await api("/api/processes"); PROCS=d.procs; } renderProcs(); }
     else if(CUR==="conns"){ if(first||!PAUSED){ const d=await api("/api/connections"); CONNS=d.conns; } renderConns(); }
     else if(CUR==="ports"){ if(first||!PAUSED){ const d=await api("/api/ports"); PORTS=d.ports; } renderPorts(); }
-    else if(CUR==="feed"){ if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none") renderFeed(); else { await pollFwLog(); renderFwLog(); } }
+    else if(CUR==="feed"){ if($("#feed-ahist").style.display!=="none"){ await loadAhist(); } else if($("#feed-dns").style.display!=="none"){ await pollDns(); renderDns(); } else if($("#feed-hist").style.display!=="none"){ await loadHist(); } else if($("#feed-etw").style.display!=="none"){ await pollEtw(); renderEtw(); } else if($("#feed-fw").style.display==="none") renderFeed(); else { await pollFwLog(); renderFwLog(); } }
     else if(CUR==="fw"){ if(first&&!FWDATA) await loadFw(); else renderRules(); }
     else if(CUR==="net"){ if(first) await loadNet(); }
     else if(CUR==="startup"){ if(first&&!STDATA) await loadStartup(); else renderStartup(); }

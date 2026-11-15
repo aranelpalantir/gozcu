@@ -2,6 +2,9 @@
 telegram.json
 nettraffic.json
 baseline.json
+suppress.json
+alerts.jsonl
+timed_blocks.json
 fw_snapshot.json
 backups/
 *.tmp

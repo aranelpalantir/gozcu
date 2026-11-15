@@ -98,11 +98,13 @@ Panel normal kullanıcıyla da çalışır; sol alttaki **“Yönetici olarak ye
 - **Değişiklik izleme:** profil kapatılması, varsayılan gelen eylemin değişmesi, yeni gelen izin kuralı, silinen engeller (panel kapalıyken olanlar dahil) uyarı üretir.
 - **İnterneti kes / ülke engelle / program engelle:** tek tıkla ve geri alınabilir.
 - **Telegram bildirimleri:** üst çubuktaki *✈ Telegram*; bot token'ı Windows DPAPI ile şifreli saklanır, hız sınırı vardır.
+- **Uyarıları yönetme:** her uyarının yanında *Sustur* (işlem + tür bazlı, *Susturulanlar* listesinden geri alınır; Telegram'a da gitmez), kalıcı **Uyarı geçmişi** (`alerts.jsonl`).
+- **Süreli program engelleme:** bir programın internetini 15 dk / 1 saat / 4 saat ya da süresiz kesin; süre dolunca kendiliğinden kalkar.
 - **Açılışta başlat:** sol alttaki düğme, oturum açılınca arka planda yönetici yetkisiyle başlatan bir zamanlanmış görev (`Gozcu`) oluşturur.
 
 ## Yerel veri dosyaları (depoya girmez)
 
-`telegram.json`, `nettraffic.json`, `baseline.json`, `fw_snapshot.json` ve `backups/` kişisel veri içerir; `.gitignore` ile dışarıda tutulur.
+`telegram.json`, `nettraffic.json`, `baseline.json`, `fw_snapshot.json`, `suppress.json`, `alerts.jsonl`, `timed_blocks.json` ve `backups/` kişisel veri içerir; `.gitignore` ile dışarıda tutulur.
 Hepsi yalnızca bu bilgisayarda durur. İndirdiğiniz IP veritabanları için `geodata/README.md`'ye bakın.
 
 ## Lisans

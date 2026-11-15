@@ -588,27 +588,39 @@ class Monitor(threading.Thread):
         ev.update(data)
         self.events.append(ev)
         self.stats[kind] += 1
-        if kind == "alert" and NOTIFY is not None:
-            try:
-                NOTIFY.push(ev)
-            except Exception:
-                pass
+        if kind == "alert":
+            persist_alert(ev)
+            if NOTIFY is not None:
+                try:
+                    NOTIFY.push(ev)
+                except Exception:
+                    pass
         return ev
 
+    @staticmethod
+    def _cat(key):
+        return key[0] if isinstance(key, tuple) and key and isinstance(key[0], str) else ""
+
     def add_alert(self, key, level, msg, **data):
+        cat = self._cat(key)
+        if cat and is_suppressed(cat, data.get("name")):
+            return
         if key in self.alert_keys:
             return
         self.alert_keys.add(key)
-        ev = self.add_event("alert", level, msg, **data)
+        ev = self.add_event("alert", level, msg, cat=cat, **data)
         self.alerts.append(ev)
 
     def add_alert_cool(self, key, cooldown, level, msg, **data):
         """Tekrarlayabilen uyarı: aynı anahtar için `cooldown` saniye içinde bir kez."""
+        cat = self._cat(key)
+        if cat and is_suppressed(cat, data.get("name")):
+            return
         now = time.time()
         if now - self.alert_cool.get(key, 0) < cooldown:
             return
         self.alert_cool[key] = now
-        ev = self.add_event("alert", level, msg, **data)
+        ev = self.add_event("alert", level, msg, cat=cat, **data)
         self.alerts.append(ev)
 
     def watch_resources(self, now, cpu, vm, procs):
@@ -1013,6 +1025,61 @@ class Monitor(threading.Thread):
 
 
 NOTIFY = None
+
+
+# ---- Susturulan uyarilar ("cat|islem adi") ve kalici uyari gecmisi
+SUP_FILE = os.path.join(APP_DIR, "suppress.json")
+SUPPRESS = {}
+ALERT_LOG = os.path.join(APP_DIR, "alerts.jsonl")
+_alog_lock = threading.Lock()
+
+
+def _sup_key(cat, name):
+    return f"{cat}|{(name or '').lower()}"
+
+
+def is_suppressed(cat, name):
+    return bool(name) and _sup_key(cat, name) in SUPPRESS
+
+
+def _sup_save():
+    try:
+        with open(SUP_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(SUPPRESS.values()), f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def _sup_load():
+    try:
+        with open(SUP_FILE, "r", encoding="utf-8") as f:
+            for r in json.load(f):
+                SUPPRESS[_sup_key(r["cat"], r["name"])] = r
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+def persist_alert(ev):
+    try:
+        row = {k: ev.get(k) for k in ("t", "level", "msg", "name", "cat", "pid")}
+        with _alog_lock, open(ALERT_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def trim_alert_log(max_bytes=2 * 1024 * 1024, keep=3000):
+    try:
+        if os.path.getsize(ALERT_LOG) <= max_bytes:
+            return
+        with open(ALERT_LOG, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-keep:]
+        with open(ALERT_LOG, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except OSError:
+        pass
+
+
 MON = Monitor()
 
 try:
@@ -1849,7 +1916,7 @@ def api_etw(q):
     for pid, v in procs.items():
         exe = (snap.get(pid) or {}).get("exe", "")
         plist.append({"pid": pid, "name": nm(pid), "tx": v[0], "rx": v[1], "txr": v[2], "rxr": v[3],
-                      "exe": exe, "blk": bool(exe) and exe.lower() in blocked})
+                      "exe": exe, "blk": bool(exe) and exe.lower() in blocked, "until": TIMED.get(exe.lower(), 0) if exe else 0})
     flows.sort(key=lambda kv: kv[1][5], reverse=True)
     flist = []
     for (pid, proto, rip, rport, lport), v in flows[:600]:
@@ -1987,6 +2054,90 @@ def find_running():
         except Exception:
             continue
     return None
+
+
+def api_suppress(q):
+    return {"rules": sorted(SUPPRESS.values(), key=lambda r: -r.get("t", 0))}
+
+
+def post_suppress_add(b):
+    cat, name = str(b.get("cat", "")).strip(), str(b.get("name", "")).strip()
+    if not cat or not name:
+        return {"ok": False, "error": "Bu uyarı türü susturulamaz (işlem adı yok)"}
+    SUPPRESS[_sup_key(cat, name)] = {"cat": cat, "name": name, "t": time.time(), "example": str(b.get("example", ""))[:200]}
+    _sup_save()
+    low = name.lower()
+    MON.alerts = deque((a for a in MON.alerts if not (a.get("cat") == cat and (a.get("name") or "").lower() == low)), maxlen=500)
+    MON.add_event("action", "info", f"Uyarı susturuldu: {name} · {cat}")
+    return {"ok": True}
+
+
+def post_suppress_remove(b):
+    key = str(b.get("key", ""))
+    cat, _, name = key.partition("|")
+    if SUPPRESS.pop(_sup_key(cat, name), None) is None:
+        return {"ok": False, "error": "Kayıt bulunamadı"}
+    _sup_save()
+    MON.add_event("action", "info", f"Uyarı susturması kaldırıldı: {name} · {cat}")
+    return {"ok": True}
+
+
+def api_alerthistory(q):
+    days = max(1, min(365, int(q.get("days", ["30"])[0])))
+    lo = time.time() - days * 86400
+    rows = []
+    try:
+        with open(ALERT_LOG, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if r.get("t", 0) >= lo:
+                    rows.append(r)
+    except OSError:
+        pass
+    return {"rows": rows[-3000:][::-1], "days": days}
+
+
+# ---- Sureli program engelleme
+TIMED_FILE = os.path.join(APP_DIR, "timed_blocks.json")
+TIMED = {}   # exe yolu (kucuk harf) -> bitis zamani
+
+
+def _timed_save():
+    try:
+        with open(TIMED_FILE, "w", encoding="utf-8") as f:
+            json.dump(TIMED, f)
+    except OSError:
+        pass
+
+
+def _timed_load():
+    try:
+        with open(TIMED_FILE, "r", encoding="utf-8") as f:
+            TIMED.update({k: float(v) for k, v in json.load(f).items()})
+    except (OSError, ValueError):
+        pass
+
+
+def timed_loop():
+    """Suresi dolan program engellerini kaldirir (yonetici gerekir; degilse sonraki denemede)."""
+    while True:
+        time.sleep(20)
+        now = time.time()
+        for exe, until in list(TIMED.items()):
+            if now < until:
+                continue
+            try:
+                r = post_unblock_program({"value": exe})
+            except PermissionError:
+                continue
+            except Exception:
+                traceback.print_exc()
+                continue
+            if r.get("ok"):
+                MON.add_event("action", "info", f"Süreli engel doldu, kaldırıldı: {exe}")
 
 
 def api_startup(q):
@@ -2159,6 +2310,14 @@ def post_block(b):
         if code != 0:
             return {"ok": False, "error": clean_ps_err(err) or "Kural eklenemedi"}
         MON.add_event("action", "warn", f"Güvenlik duvarı kuralı eklendi: {name}")
+    if kind == "program":
+        minutes = max(0, min(7 * 24 * 60, int(b.get("minutes", 0) or 0)))
+        if minutes:
+            TIMED[val.lower()] = time.time() + minutes * 60
+            MON.add_event("action", "info", f"Program {minutes} dk süreyle engellendi: {val}")
+        else:
+            TIMED.pop(val.lower(), None)
+        _timed_save()
     CACHE["fw_rules"].get(True)
     return {"ok": True}
 
@@ -2360,6 +2519,8 @@ def post_unblock_program(b):
         " | Remove-NetFirewallRule", timeout=60, env_extra={"SYSDASH_ARG": "|".join(names)})
     if code != 0:
         return {"ok": False, "error": clean_ps_err(err)}
+    TIMED.pop(val.lower(), None)
+    _timed_save()
     MON.add_event("action", "info", f"Program engeli kaldırıldı: {val}")
     CACHE["fw_rules"].get(True)
     return {"ok": True}
@@ -3089,11 +3250,11 @@ GET_ROUTES = {
     "/api/connections": api_connections, "/api/ports": api_ports, "/api/events": api_events,
     "/api/firewall": api_firewall, "/api/fwlog": api_fwlog, "/api/etw": api_etw, "/api/etwhist": api_etwhist, "/api/etwproc": api_etwproc, "/api/etwdns": api_etwdns, "/api/timeline": api_timeline, "/api/fwhealth": api_fwhealth, "/api/notify": api_notify, "/api/fwbackups": api_fwbackups,"/api/startup": api_startup,
     "/api/network": api_network, "/api/security": api_security, "/api/scan": api_scan_status,
-    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
+    "/api/drives": api_drives, "/api/token": lambda q: {"token": TOKEN}, "/api/ping": lambda q: {"app": "gozcu"}, "/api/suppress": api_suppress, "/api/alerthistory": api_alerthistory, "/api/autostart": api_autostart, "/api/baseline": api_baseline,
     "/api/cleanup": api_cleanup,
 }
 POST_ROUTES = {
-    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
+    "/api/kill": post_kill, "/api/block": post_block, "/api/fw/remove": post_fw_remove, "/api/netcut": post_netcut, "/api/unblock": post_unblock_program, "/api/blockcountry": post_blockcountry, "/api/fwbackup": post_fwbackup, "/api/fwrestore": post_fwrestore, "/api/fwbackup/delete": post_fwbackup_delete, "/api/notify/save": post_notify_save, "/api/autostart": post_autostart, "/api/suppress/add": post_suppress_add, "/api/suppress/remove": post_suppress_remove, "/api/quit": post_quit, "/api/notify/test": post_notify_test, "/api/fwrule/toggle": post_fwrule_toggle, "/api/fwrule/scope": post_fwrule_scope, "/api/unblockcountry": post_unblockcountry,
     "/api/fw/logging": post_fw_logging, "/api/startup/toggle": post_startup_toggle, "/api/reveal": post_reveal, "/api/scan": post_scan,
     "/api/scan/cancel": post_scan_cancel, "/api/elevate": post_elevate, "/api/alerts/clear": post_clear_alerts,
     "/api/suspend": post_suspend, "/api/priority": post_priority, "/api/baseline/save": post_baseline_save,
@@ -3130,6 +3291,12 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(APP_DIR, "index.html"), "rb") as f:
                 html = f.read().replace(b"__SYSDASH_TOKEN__", TOKEN.encode())
             return self.send(200, html, "text/html; charset=utf-8")
+        if u.path == "/favicon.ico":
+            try:
+                with open(os.path.join(APP_DIR, "gozcu.ico"), "rb") as f:
+                    return self.send(200, f.read(), "image/x-icon")
+            except OSError:
+                return self.send(404, b"not found", "text/plain")
         fn = GET_ROUTES.get(u.path)
         if not fn:
             return self.send(404, b"not found", "text/plain")
@@ -3228,6 +3395,10 @@ def main():
     threading.Thread(target=_netcut_loop, daemon=True).start()
     if GEO is not None:
         GEO.start()
+    _sup_load()
+    _timed_load()
+    trim_alert_log()
+    threading.Thread(target=timed_loop, daemon=True).start()
     threading.Thread(target=fw_watch_loop, daemon=True).start()
     if NOTIFY is not None and not os.environ.get("GOZCU_NO_NOTIFY"):   # test kopyaları gerçek bota yazmasın
         NOTIFY.start()

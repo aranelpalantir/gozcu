@@ -4,9 +4,14 @@
 
 ![Gözcü](gozcu.svg)
 
+**Türkçe** · [English](README.en.md)
+
 Bilgisayarda o an ne olup bittiğini (işlemler, ağ trafiği, DNS, güvenlik duvarı) tek ekranda gösteren yerel bir Windows paneli.
 Sunucu yalnızca `127.0.0.1` üzerinde çalışır ve varsayılan olarak hiçbir veri dışarı gönderilmez. Tek istisna, sizin açtığınız
 **Telegram bildirimleri**dir (yalnızca kendi botunuza gider). Çevrimdışı IP veritabanı kullanır; sorgular internete çıkmaz.
+
+> **Durum: beta (v0.1.x).** Yönetici gerektiren bazı özellikler (ülke engelleme, açılışta başlatma, yedekten geri yükleme) sınırlı test edildi.
+> Hata ya da güvenlik açığı bildirmek için bkz. [SECURITY.md](SECURITY.md).
 
 > **Uyarı:** Panel güvenlik duvarı kuralları ekler/siler, interneti kesebilir ve işlem sonlandırabilir. Yalnızca kendi bilgisayarınızda,
 > ne yaptığınızı bilerek kullanın. Riskli işlemlerden önce otomatik güvenlik duvarı yedeği alınır. Yazılım garantisiz sunulur (MIT).
